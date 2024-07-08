@@ -1,0 +1,34 @@
+# config.yml
+
+# change PMS path here
+# path before /Library/Application Support/Metadata
+plex_root: '/volume1/docker/plex/Library/Application Support/Plex Media Server/'
+
+# change plex url and token here
+baseurl: 'http://yourserveriporhostname:plexportopsional' # i.e http://192.168.1.1:32400 or if proxy i.e. https://plex.yourtld.com
+token: 'yourplextokenhere'
+
+# input the libraries you want to export NFO/poster/art
+libraries_names: [
+    'Movies',
+    'TV Shows',
+    'Anime'
+    ]
+
+# minimum age (days) for NFO/poster/art not to be replaced
+# i.e setting 15 means any NFO/poster/art file older than 15 days will not be replaced
+# !!!!!!! set lower than how often you plan to run the script !!!!!!!
+days_difference: 15
+
+# change/add path mapping if plex path is different from local (script) path
+# !!!!!!! ommmit the last slash "/" !!!!!!!!
+path_mapping: [
+    {
+        'plex': '/data_media',
+        'local': '/volume1/data/media'
+    },
+    {
+        'plex': '/usb2',
+        'local': '/volumeUSB2/usbshare/data'
+    }
+]
