@@ -132,7 +132,7 @@ def write_nfo(title, nfo_path, library_type, media_title):
             nfo.write('    </rating>\n')
             nfo.write('  </ratings>\n')
 
-        nfo.write(f'</{library_type}')
+        nfo.write(f'</{library_type}>')
 
     print(f'[SUCCESS] NFO successfully saved to {nfo_path}')
 
