@@ -41,31 +41,54 @@ def write_nfo(title, nfo_path, library_type, media_title):
             # for plex's own new agents
             if isinstance(title.guids, list) and len(title.guids) > 0:
                 for guid in title.guids:
+                    # write uniqueid, id and imdb_id/imdbid for tv and movies
                     if library_type == 'tvshow':
+                        if 'imdb' in guid.id:
+                            nfo.write(f'  <imdb_id>{guid.id[guid.id.rfind("//")+2:]}</imdb_id>\n')
+
                         if 'tvdb' not in guid.id:
                             continue
                         else:
-                            nfo.write(f'  <uniqueid default="true" type="tvdb">{guid.id[guid.id.rfind("//")+2:]}</uniqueid>\n')
+                            nfo.write(f'  <uniqueid default="true" type="tvdbid">{guid.id[guid.id.rfind("//")+2:]}</uniqueid>\n')
+                            nfo.write(f'  <id>{guid.id[guid.id.rfind("//")+2:]}</id>\n')
                             break
                     elif library_type == 'Movie':
-                        if 'themoviedb' not in guid.id:
+                        if 'imdb' not in guid.id:
                             continue
                         else:
-                            nfo.write(f'  <uniqueid default="true" type="tmdb">{guid.id[guid.id.rfind("//")+2:]}</uniqueid>\n')
+                            nfo.write(f'  <uniqueid default="true" type="imdbid">{guid.id[guid.id.rfind("//")+2:]}</imdbid>\n')
+                            nfo.write(f'  <id>{guid.id[guid.id.rfind("//")+2:]}</id>\n')
                             break
+                    
+                    if 'tvdb' in guid.id:
+                        nfo.write(f'  <tvdbid>{guid.id[guid.id.rfind("//")+2:]}</tvdbid>\n')
+                    
+                    if 'tmdb' in guid.id:
+                        nfo.write(f'  <tmdbid>{guid.id[guid.id.rfind("//")+2:]}</tmdbid>\n')
+
             # for other agents
             else:
                 guid = title.guid
                 if 'agents.hama' in guid:
+                    nfo.write(f'  <showtitle>{media_title}</showtitle>\n')
                     nfo.write(f'  <uniqueid default="true" type="{guid[guid.rfind("//")+2:guid.rfind("-")]}">{guid[guid.rfind("-")+1:]}</uniqueid>\n')
+                    nfo.write(f'  <{guid[guid.rfind("//")+2:guid.rfind("-")]}id>{guid[guid.rfind("-")+1:]}</{guid[guid.rfind("//")+2:guid.rfind("-")]}id>\n')
                 elif 'themoviedb' in title.guid:
-                    nfo.write(f'  <uniqueid default="true" type="tmdb">{guid[guid.rfind("//")+2:]}</uniqueid>\n')
+                    nfo.write(f'  <uniqueid default="true" type="tmdb">{guid[guid.rfind("-")+1:]}</uniqueid>\n')
+                    nfo.write(f'  <tmdbid>{guid[guid.rfind("-")+1:]}</tmdbid>\n')
                 elif 'tvdb' in title.guid:
-                    nfo.write(f'  <uniqueid default="true" type="tvdb">{guid[guid.rfind("//")+2:]}</uniqueid>\n')
+                    nfo.write(f'  <uniqueid default="true" type="tvdb">{guid[guid.rfind("-")+1:]}</uniqueid>\n')
+                    nfo.write(f'  <tvdbid>{guid[guid.rfind("-")+1:]}</tvdbid>\n')
+                    if library_type == 'tvshow':
+                        nfo.write(f'  <id>{guid[guid.rfind("-")+1:]}</id>\n')
                 elif 'imdb' in title.guid:
-                    nfo.write(f'  <uniqueid default="true" type="imdb">{guid[guid.rfind("//")+2:]}</uniqueid>\n')
+                    nfo.write(f'  <uniqueid default="true" type="imdb">{guid[guid.rfind("-")+1:]}</uniqueid>\n')
+                    nfo.write(f'  <imdbid>{guid[guid.rfind("-")+1:]}</imdbid>\n')
+                    if library_type == 'Movie':
+                        nfo.write(f'  <id>{guid[guid.rfind("-")+1:]}</id>\n')
                 elif 'anidb' in title.guid:
-                    nfo.write(f'  <uniqueid default="true" type="anidb">{guid[guid.rfind("//")+2:]}</uniqueid>\n')
+                    nfo.write(f'  <uniqueid default="true" type="anidb">{guid[guid.rfind("-")+1:]}</uniqueid>\n')
+                    nfo.write(f'  <anidbid>{guid[guid.rfind("-")+1:]}</anidb>\n')
                 else:
                     print(f'[FAILURE] No uniqueid detected for {media_title}')
                     pass
