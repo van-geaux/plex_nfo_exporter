@@ -48,10 +48,10 @@ def write_nfo(title, nfo_path, library_type, media_title):
                             nfo.write(f'  <uniqueid default="true" type="tvdb">{guid.id[guid.id.rfind("//")+2:]}</uniqueid>\n')
                             break
                     elif library_type == 'Movie':
-                        if 'imdb' not in guid.id:
+                        if 'themoviedb' not in guid.id:
                             continue
                         else:
-                            nfo.write(f'  <uniqueid default="true" type="imdb">{guid.id[guid.id.rfind("//")+2:]}</uniqueid>\n')
+                            nfo.write(f'  <uniqueid default="true" type="tmdb">{guid.id[guid.id.rfind("//")+2:]}</uniqueid>\n')
                             break
             # for other agents
             else:

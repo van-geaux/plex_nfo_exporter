@@ -2,13 +2,14 @@
 
 # change PMS path here
 # path before /Library/Application Support/Metadata
+# !!!!!!! DO NOT OMMIT THE LAST SLASH "/" !!!!!!!
 plex_root: '/volume1/docker/plex/Library/Application Support/Plex Media Server/'
 
 # change plex url and token here
-baseurl: 'http://yourserveriporhostname:plexportopsional' # i.e http://192.168.1.1:32400 or if proxy i.e. https://plex.yourtld.com
-token: 'yourplextokenhere'
+baseurl: 'http://yourserveriporhostname:plexportopsional' # i.e http://192.168.1.1:32400 or if reverse proxied i.e. https://plex.yourtld.com
+token: 'yourplextokenhere' # how to get token https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/
 
-# input the libraries you want to export NFO/poster/art
+# input the libraries you want to export NFO/poster/fanart from
 libraries_names: [
     'Movies',
     'TV Shows',
@@ -21,7 +22,7 @@ libraries_names: [
 days_difference: 15
 
 # change/add path mapping if plex path is different from local (script) path
-# !!!!!!! ommmit the last slash "/" !!!!!!!!
+# !!!!!!! OMMIT THE LAST SLASH "/" !!!!!!!!
 path_mapping: [
     {
         'plex': '/data_media',
