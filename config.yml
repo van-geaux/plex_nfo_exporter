@@ -1,25 +1,27 @@
 # config.yml
 
-# change PMS path here
+# change PMS path here (not used anymore)
 # path before /Library/Application Support/Metadata
 # !!!!!!! DO NOT OMMIT THE LAST SLASH "/" !!!!!!!
-plex_root: '/volume1/docker/plex/Library/Application Support/Plex Media Server/'
+# plex_root: '/docker/plex/Library/Application Support/Plex Media Server/'
 
 # change plex url and token here
-baseurl: 'http://yourserveriporhostname:plexportopsional' # i.e http://192.168.1.1:32400 or if reverse proxied i.e. https://plex.yourtld.com
-token: 'yourplextokenhere' # how to get token https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/
+baseurl: http://yourserveriporhostname:plexportopsional # i.e http://192.168.1.1:32400 or if reverse proxied i.e. https://plex.yourtld.com
+token: yourplextokenhere # how to get token https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/
 
 # input the libraries you want to export NFO/poster/fanart from
-libraries_names: [
-    'Movies',
-    'TV Shows',
-    'Anime'
-    ]
+library_names: ['Movies', 'TV Shows', 'Anime']
 
 # minimum age (days) for NFO/poster/art not to be replaced
 # i.e setting 15 means any NFO/poster/art file older than 15 days will not be replaced
 # !!!!!!! set lower than how often you plan to run the script !!!!!!!
-days_difference: 15
+days_difference: 4
+
+# true/false choose what to export
+# !!!!!!! do not wrap in quotes !!!!!!!
+export_nfo: true
+export_poster: false
+export_fanart: false
 
 # change/add path mapping if plex path is different from local (script) path
 # !!!!!!! OMMIT THE LAST SLASH "/" !!!!!!!!

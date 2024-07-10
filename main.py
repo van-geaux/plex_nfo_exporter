@@ -1,5 +1,5 @@
-from PIL import Image
 from io import BytesIO
+from PIL import Image
 from plexapi.server import PlexServer
 
 import os
@@ -10,14 +10,18 @@ import yaml
 with open('config.yml', 'r') as file:
     config = yaml.safe_load(file)
 
-plex_root = config['plex_root']
+# plex_root = config['plex_root']
 baseurl = config['baseurl']
 token = config['token']
 plex = PlexServer(baseurl, token)
 
-libraries_names = config['libraries_names']
+library_names = config['library_names']
 days_difference = config['days_difference']
 path_mapping = config['path_mapping']
+
+export_nfo = config['export_nfo']
+export_poster = config['export_poster']
+export_fanart = config['export_fanart']
 
 current_time = datetime.datetime.now()
 
@@ -33,111 +37,87 @@ def download_image(url, save_path):
         print(f"[ERROR] An error occurred: {e}")
 
 def write_nfo(title, nfo_path, library_type, media_title):
-    with open(nfo_path, 'w', encoding='utf-8') as nfo:
-        nfo.write('<?xml version="1.0" encoding="UTF-8"?>\n')
-        nfo.write(f'<{library_type} xsi="http://www.w3.org/2001/XMLSchema-instance" xsd="http://www.w3.org/2001/XMLSchema">\n')
+    try:
+        other_ids = []
 
-        try:
-            # for plex's own new agents
-            if isinstance(title.guids, list) and len(title.guids) > 0:
-                for guid in title.guids:
-                    # write uniqueid, id and imdb_id/imdbid for tv and movies
-                    if library_type == 'tvshow':
-                        if 'imdb' in guid.id:
-                            nfo.write(f'  <imdb_id>{guid.id[guid.id.rfind("//")+2:]}</imdb_id>\n')
+        # get metadata agent id for plex's own new agents
+        if title.guids:
+            for guid in title.guids:
+                if library_type == 'tvshow':
+                    if 'imdb' in guid.id:
+                        other_ids.append({'id_tag': 'imdb_id', 'id_number': guid.id[guid.id.rfind("//")+2:]})
+                    elif 'tvdb' in guid.id:
+                        id_number = guid.id[guid.id.rfind("//")+2:]
+                        other_ids.append({'id_tag': 'tvdbid', 'id_number': guid.id[guid.id.rfind("//")+2:]})
+                    else:
+                        other_ids.append({'id_tag': guid.id[:guid.id.rfind(':')]+'id', 'id_number': guid.id[guid.id.rfind("//")+2:]})
 
-                        if 'tvdb' not in guid.id:
-                            continue
-                        else:
-                            nfo.write(f'  <uniqueid default="true" type="tvdbid">{guid.id[guid.id.rfind("//")+2:]}</uniqueid>\n')
-                            nfo.write(f'  <id>{guid.id[guid.id.rfind("//")+2:]}</id>\n')
-                            break
-                    elif library_type == 'Movie':
-                        if 'imdb' not in guid.id:
-                            continue
-                        else:
-                            nfo.write(f'  <uniqueid default="true" type="imdbid">{guid.id[guid.id.rfind("//")+2:]}</imdbid>\n')
-                            nfo.write(f'  <id>{guid.id[guid.id.rfind("//")+2:]}</id>\n')
-                            break
-                    
-                    if 'tvdb' in guid.id:
-                        nfo.write(f'  <tvdbid>{guid.id[guid.id.rfind("//")+2:]}</tvdbid>\n')
-                    
-                    if 'tmdb' in guid.id:
-                        nfo.write(f'  <tmdbid>{guid.id[guid.id.rfind("//")+2:]}</tmdbid>\n')
+                elif library_type == 'Movie':
+                    if 'imdb' in guid.id:
+                        id_number = guid.id[guid.id.rfind("//")+2:]
+                        other_ids.append({'id_tag': 'imdbid', 'id_number': guid.id[guid.id.rfind("//")+2:]})
+                    else:
+                        other_ids.append({'id_tag': guid.id[:guid.id.rfind(':')]+'id', 'id_number': guid.id[guid.id.rfind("//")+2:]})
+        # get metadata agent id for other metadata agents
+        else:
+            guid = title.guid
 
-            # for other agents
-            else:
-                guid = title.guid
-                if 'agents.hama' in guid:
-                    nfo.write(f'  <showtitle>{media_title}</showtitle>\n')
-                    nfo.write(f'  <uniqueid default="true" type="{guid[guid.rfind("//")+2:guid.rfind("-")]}">{guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]}</uniqueid>\n')
-                    nfo.write(f'  <{guid[guid.rfind("//")+2:guid.rfind("-")]}id>{guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]}</{guid[guid.rfind("//")+2:guid.rfind("-")]}id>\n')
-                elif 'themoviedb' in title.guid:
-                    nfo.write(f'  <uniqueid default="true" type="tmdb">{guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]}</uniqueid>\n')
-                    nfo.write(f'  <tmdbid>{guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]}</tmdbid>\n')
-                elif 'tvdb' in title.guid:
-                    nfo.write(f'  <uniqueid default="true" type="tvdb">{guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]}</uniqueid>\n')
-                    nfo.write(f'  <tvdbid>{guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]}</tvdbid>\n')
-                    if library_type == 'tvshow':
-                        nfo.write(f'  <id>{guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]}</id>\n')
-                elif 'imdb' in title.guid:
-                    nfo.write(f'  <uniqueid default="true" type="imdb">{guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]}</uniqueid>\n')
-                    nfo.write(f'  <imdbid>{guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]}</imdbid>\n')
-                    if library_type == 'Movie':
-                        nfo.write(f'  <id>{guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]}</id>\n')
-                elif 'anidb' in title.guid:
-                    nfo.write(f'  <uniqueid default="true" type="anidb">{guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]}</uniqueid>\n')
-                    nfo.write(f'  <anidbid>{guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]}</anidb>\n')
-                else:
-                    print(f'[FAILURE] No uniqueid detected for {media_title}')
-                    pass
+            if 'imdb:' in guid:
+                other_ids.append({'id_tag': 'imdbid', 'id_number': guid[guid.rfind("//")+2:(guid.rfind("?") if "?" in guid else len(guid))]})
+            elif 'tvdb:' in guid:
+                other_ids.append({'id_tag': 'tvdbid', 'id_number': guid[guid.rfind("//")+2:(guid.rfind("?") if "?" in guid else len(guid))]})
+            elif 'themoviedb:' in guid:
+                other_ids.append({'id_tag': 'tmdbid', 'id_number': guid[guid.rfind("//")+2:(guid.rfind("?") if "?" in guid else len(guid))]})
+            elif 'imdb' in guid:
+                id_number = guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]
+                other_ids.append({'id_tag': 'imdbid', 'id_number': id_number})
+            elif 'tvdb' in guid:
+                id_number = guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]
+                other_ids.append({'id_tag': 'anidbid', 'id_number': id_number})
+            elif 'anidb' in guid:
+                other_ids.append({'id_tag': 'anidbid', 'id_number': guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]})
+            elif 'themoviedb' in guid:
+                other_ids.append({'id_tag': 'tmdbid', 'id_number': guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]})            
 
-        except:
-            print(f'[FAILURE] No uniqueid detected for {media_title}')
-            pass
+        with open(nfo_path, 'w', encoding='utf-8') as nfo:
+            nfo.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+            nfo.write(f'<{library_type} xsi="http://www.w3.org/2001/XMLSchema-instance" xsd="http://www.w3.org/2001/XMLSchema">\n')
 
-        try:
+            try:
+                nfo.write(f'  <id>{id_number}</id>\n')
+            except:
+                pass
+
+            if other_ids:
+                for other_id in other_ids:
+                    nfo.write(f'  <{other_id.get("id_tag")}>{other_id.get("id_number")}</{other_id.get("id_tag")}>\n')
+
             nfo.write(f'  <title>{media_title}</title>\n')
-        except:
-            pass
 
-        try:
-            nfo.write(f'  <plot>{title.summary}</plot>\n')
-        except:
-            pass
+            try:
+                nfo.write(f'  <plot>{title.summary}</plot>\n')
+            except:
+                pass
 
-        try:
-            nfo.write(f'  <studio>{title.studio}</studio>\n')
-        except:
-            pass
+            try:
+                nfo.write(f'  <year>{title.year}</year>\n')
+            except:
+                pass
 
-        try:
-            nfo.write(f'  <year>{title.year}</year>\n')
-        except:
-            pass
+            # try:
+            #     nfo.write(f'  <mpaa>{title.contentRating}</mpaa>\n')
+            # except:
+            #     pass
 
-        try:
-            nfo.write(f'  <mpaa>{title.contentRating}</mpaa>\n')
-        except:
-            pass
+            nfo.write(f'</{library_type}>')
 
-        try:
-            nfo.write('  <ratings>\n')
-            nfo.write('    <rating default="" max="10" Name="">\n')
-            nfo.write(f'      <value>{title.rating}</value>\n')
-        except:
-            pass
-        finally:
-            nfo.write('    </rating>\n')
-            nfo.write('  </ratings>\n')
+            print(f'[SUCCESS] NFO successfully saved to {nfo_path}')
 
-        nfo.write(f'</{library_type}>')
-
-    print(f'[SUCCESS] NFO successfully saved to {nfo_path}')
+    except Exception as e:
+        print(f'[FAILURE] Failed to write NFO for {media_title} due to {e}')
 
 def main():
-    for name in libraries_names:
+    for name in library_names:
         for library in plex.library.sections():
             if name.lower() == library.title.lower():
                 for title in library.search():
@@ -159,55 +139,58 @@ def main():
                         poster_path = poster_path.replace(path_list.get('plex'), path_list.get('local'))
                         fanart_path = fanart_path.replace(path_list.get('plex'), path_list.get('local'))
 
-                    if os.path.exists(nfo_path):
-                        file_mod_time = datetime.datetime.fromtimestamp(os.path.getmtime(nfo_path))
-                        time_difference = current_time - file_mod_time
-
-                        if time_difference.days < days_difference:
-                            write_nfo(title, nfo_path, library_type, media_title)
-                        else:
-                            print(f'[SKIPPED] NFO for {media_title} skipped because there is NFO file older than {days_difference} days')
-
-                    else:
-                        write_nfo(title, nfo_path, library_type, media_title)
-
-                    try:
-                        if os.path.exists(poster_path):
-                            file_mod_time = datetime.datetime.fromtimestamp(os.path.getmtime(poster_path))
+                    if export_nfo is True:
+                        if os.path.exists(nfo_path):
+                            file_mod_time = datetime.datetime.fromtimestamp(os.path.getmtime(nfo_path))
                             time_difference = current_time - file_mod_time
-                                        
+
                             if time_difference.days < days_difference:
+                                write_nfo(title, nfo_path, library_type, media_title)
+                            else:
+                                print(f'[SKIPPED] NFO for {media_title} skipped because there is NFO file older than {days_difference} days')
+
+                        else:
+                            write_nfo(title, nfo_path, library_type, media_title)
+
+                    if export_poster is True:
+                        try:
+                            if os.path.exists(poster_path):
+                                file_mod_time = datetime.datetime.fromtimestamp(os.path.getmtime(poster_path))
+                                time_difference = current_time - file_mod_time
+                                            
+                                if time_difference.days < days_difference:
+                                    url = title.posterUrl
+                                    download_image(url, poster_path)
+                                    print(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
+
+                                else:
+                                    print(f'[SKIPPED] Poster for {media_title} skipped because there is poster file older than {days_difference} days')
+                            else:
                                 url = title.posterUrl
                                 download_image(url, poster_path)
                                 print(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
+                        except:
+                            print(f'[FAILURE] Poster for {media_title} not found')
 
+                    if export_fanart is True:
+                        try:
+                            if os.path.exists(fanart_path):
+                                file_mod_time = datetime.datetime.fromtimestamp(os.path.getmtime(fanart_path))
+                                time_difference = current_time - file_mod_time
+                                            
+                                if time_difference.days < days_difference:
+                                    url = title.artUrl
+                                    download_image(url, fanart_path)
+                                    print(f'[SUCCESS] Fanart successfully saved to {fanart_path}')
+
+                                else:
+                                    print(f'[SKIPPED] Fanart for {media_title} skipped because there is fanart file older than {days_difference} days')
                             else:
-                                print(f'[SKIPPED] Poster for {media_title} skipped because there is poster file older than {days_difference} days')
-                        else:
-                            url = title.posterUrl
-                            download_image(url, poster_path)
-                            print(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
-                    except:
-                        print(f'[FAILURE] Poster for {media_title} not found')
-
-                    try:
-                        if os.path.exists(fanart_path):
-                            file_mod_time = datetime.datetime.fromtimestamp(os.path.getmtime(fanart_path))
-                            time_difference = current_time - file_mod_time
-                                        
-                            if time_difference.days < days_difference:
                                 url = title.artUrl
                                 download_image(url, fanart_path)
-                                print(f'[SUCCESS] Fanart successfully saved to {fanart_path}')
-
-                            else:
-                                print(f'[SKIPPED] Fanart for {media_title} skipped because there is fanart file older than {days_difference} days')
-                        else:
-                            url = title.artUrl
-                            download_image(url, fanart_path)
-                            print(f'[SUCCESS] Fanart for {media_title} successfully saved to {fanart_path}')
-                    except:
-                        print(f'[FAILURE] Fanart for {media_title} not found')
+                                print(f'[SUCCESS] Fanart for {media_title} successfully saved to {fanart_path}')
+                        except:
+                            print(f'[FAILURE] Fanart for {media_title} not found')
 
 if __name__ == '__main__':    
     main()
