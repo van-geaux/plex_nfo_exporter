@@ -73,7 +73,7 @@ def write_nfo(title, nfo_path, library_type, media_title):
                 other_ids.append({'id_tag': 'imdbid', 'id_number': id_number})
             elif 'tvdb' in guid:
                 id_number = guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]
-                other_ids.append({'id_tag': 'anidbid', 'id_number': id_number})
+                other_ids.append({'id_tag': 'tvdb', 'id_number': id_number})
             elif 'anidb' in guid:
                 other_ids.append({'id_tag': 'anidbid', 'id_number': guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]})
             elif 'themoviedb' in guid:
