@@ -4,8 +4,9 @@
 3. Extract active art (background art) from Plex
 4. Put all of them in media directory as tvshow/movie.nfo, poster.jpg, and fanart.jpg to be use on other media server i.e. Jellyfin
 5. Do it all without refreshing library metadata
-6. Allow you to choose which library to process
-7. Support separated plex and library servers with path mapping
+6. Option to choose what to export
+7. Option to choose which library to process
+8. Support separated plex and library servers with path mapping
 
 # How to use
 1. Download the repo and put it anywhere you like
@@ -25,14 +26,13 @@
 
 # Features and limitations
 1. It support the new plex's tv and movie agent and will set tvdb and imdb respectively for main identifier in NFO file
-2. Otherwise, it first detect [Hama agent](https://github.com/ZeroQI/Hama.bundle) and set its metadata source (i.e. anidb) as main identifier because my main library is anime library in NFO file
-3. For other metadata agents, it will find and use metadata sources in this priority: themoviedb > tvdb > imdb > anidb > skip
-4. The NFO file will only consist of what I think is necessary: metadata source, title, summary, studio, year, content rating, and rating
-5. The NFO file only consist of that because when I tested it in jellyfin, it pull all other necessary data from metadata source anyway and still use whatever in the NFO as priority
-6. For a mixed (tv and movie) library, it will save the NFO as tvshow.nfo
-7. With the same reasoning, the images pulled as poster.jpg and fanart.jpg are the current active images in plex
-8. That way plex and jellyfin should show practically the same library (in image and media names)
-9. I tried to make a docker image with cron job for better convenience but still fails, I will learn more and hope I can do it in the near future
+2. It will also detect [Hama agent](https://github.com/ZeroQI/Hama.bundle) and other agents and set their metadata source ids accordingly
+3. The NFO file will only consist of what I think is the bare neccessity: metadata source id, title, summary, year
+4. The NFO file only consist of that because when I tested it in jellyfin, it pull all other necessary data from metadata source anyway and still use whatever in the NFO as priority
+5. For a mixed (tv and movie) library, it will save the NFO as tvshow.nfo
+6. With the same reasoning, the images pulled as poster.jpg and fanart.jpg are the current active images in plex
+7. That way plex and jellyfin should show practically the same library (in image and media names)
+8. I tried to make a docker image with cron job for better convenience but still fails, I will learn more and hope I can do it in the near future
 
 # A little background
 1. I'm not a developer by trade
