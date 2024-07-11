@@ -42,22 +42,22 @@ path_mapping: [
 # important
 # change only if you know you don't want these metadata
 title: true
-agent_id: true
+agent_id: true # will export all available metadata agent ids
 tagline: true
 plot: true
 year: true
 
 # optionals
-studio: true
-mpaa: true
-criticrating: true
-customrating: true
-runtime: true
-releasedate: true
-genre: true
-country: true
-ratings: true
-directors: true
-writers: true
-roles: true
+studio: false
+mpaa: false
+criticrating: false
+customrating: false
+runtime: false
+releasedate: false
+genre: false
+country: false
+ratings: false
+directors: false
+writers: false
+roles: false
 # producers: false # there's no equivalent in jellyfin metadata

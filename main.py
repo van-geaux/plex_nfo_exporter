@@ -47,8 +47,8 @@ def write_nfo(config, nfo_path, library_type, meta_root, media_title):
                 if 'themoviedb' in guid:
                     nfo.write(f'  <tmdbid>{guid[guid.rfind("//")+2:(guid.rfind("?") if "?" in guid else len(guid))]}</tmdbid>\n')
 
-                if 'anidb' in guid:
-                    nfo.write(f'  <anidbid>{guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]}</anidbid>\n')
+                if 'agents.hama' in guid:
+                    nfo.write(f'  <{guid[guid.rfind("//")+2:guid.rfind("-")]}id>{guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]}</{guid[guid.rfind("//")+2:guid.rfind("-")]}id>\n')
 
                 for agent in meta_root.findall('Guid'):
                     agent_name = agent.get('id')[:agent.get('id').rfind(':')]+'id'
@@ -93,7 +93,7 @@ def write_nfo(config, nfo_path, library_type, meta_root, media_title):
                 for country in meta_root.findall('Country'):
                     nfo.write(f'  <country>{country.get("tag")}</country>\n')
 
-            if config['ratings'] and meta_root.findall('Country'):
+            if config['ratings'] and meta_root.findall('Rating'):
                 nfo.write('  <ratings>\n')
                 for rating in meta_root.findall('Rating'):
                     nfo.write(f'    <{rating.get("type")}>{rating.get("value")}</{rating.get("type")}>\n')
@@ -101,15 +101,29 @@ def write_nfo(config, nfo_path, library_type, meta_root, media_title):
 
             if config['directors'] and meta_root.findall('Director'):
                 for director in meta_root.findall('Director'):
-                    nfo.write(f'  <director thumb={director.get("thumb")}>{director.get("tag")}</director>\n')
+                    tags = '  <director'
+                    if director.get("thumb"):
+                        tags += f' thumb="{director.get("thumb")}"'
+                    tags += f'>{director.get("tag")}</director>\n'
+                    nfo.write(tags)
 
             if config['writers'] and meta_root.findall('Writer'):
                 for writer in meta_root.findall('Writer'):
-                    nfo.write(f'  <writer thumb={writer.get("thumb")}>{writer.get("tag")}</writer>\n')
+                    tags = '  <writer'
+                    if writer.get("thumb"):
+                        tags += f' thumb="{writer.get("thumb")}"'
+                    tags += f'>{writer.get("tag")}</writer>\n'
+                    nfo.write(tags)
 
             if config['roles'] and meta_root.findall('Role'):
                 for role in meta_root.findall('Role'):
-                    nfo.write(f'  <actor thumb={role.get("thumb")} role={role.get("role")}>{role.get("tag")}</actor>\n')
+                    tags = '  <actor'
+                    if role.get("thumb"):
+                        tags += f' thumb="{role.get("thumb")}"'
+                    if role.get("role"):
+                        tags += f' role="{role.get("role")}"'
+                    tags += f'>{role.get("tag")}</actor>\n'
+                    nfo.write(tags)
 
             nfo.write(f'</{library_type}>')
 
