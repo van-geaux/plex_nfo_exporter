@@ -1,4 +1,5 @@
 # config.yml
+# support environment variables in .env file
 
 # change PMS path here (not used anymore)
 # path before /Library/Application Support/Metadata
@@ -7,8 +8,8 @@
 
 # change plex url and token here
 # !!!!!!! OMMIT THE LAST SLASH "/" !!!!!!!!
-baseurl: http://yourserveriporhostname:plexportopsional # i.e http://192.168.1.1:32400 or if reverse proxied i.e. https://plex.yourtld.com
-token: yourplextokenhere # how to get token https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/
+baseurl: ${PLEX_URL} # i.e http://192.168.1.1:32400 or if reverse proxied i.e. https://plex.yourtld.com
+token: ${PLEX_TOKEN} # how to get token https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/
 
 # input the libraries you want to export NFO/poster/fanart from
 library_names: ['Movies', 'TV Shows', 'Anime']

@@ -1,11 +1,21 @@
-from PIL import Image
+from dotenv import load_dotenv
 from io import BytesIO
+from PIL import Image
 
-import os
 import datetime
+import os
+import re
 import requests
 import xml.etree.ElementTree as ET
 import yaml
+
+def env_var_constructor(loader, node):
+    value = loader.construct_scalar(node)
+    pattern = re.compile(r'\$\{(\w+)\}')
+    match = pattern.findall(value)
+    for var in match:
+        value = value.replace(f'${{{var}}}', os.getenv(var, ''))
+    return value
 
 def get_library_details(plex_url,headers, library_names):
     if plex_url:
@@ -133,8 +143,13 @@ def write_nfo(config, nfo_path, library_type, meta_root, media_title):
         print(f'[FAILURE] Failed to write NFO for {media_title} due to {e}')
 
 def main():
+    load_dotenv()
+    yaml.SafeLoader.add_constructor('!env_var', env_var_constructor)
+
     with open('config.yml', 'r') as file:
-        config = yaml.safe_load(file)
+        config_content = file.read()
+        config_content = re.sub(r'\$\{(\w+)\}', lambda match: os.getenv(match.group(1), ''), config_content)
+        config = yaml.safe_load(config_content)
 
     baseurl = config['baseurl']
     token = config['token']

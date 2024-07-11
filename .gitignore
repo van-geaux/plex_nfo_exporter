@@ -153,4 +153,4 @@ cython_debug/
 
 /test*
 
-main.ipynb
+*ipynb
