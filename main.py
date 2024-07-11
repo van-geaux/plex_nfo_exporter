@@ -1,29 +1,29 @@
-from io import BytesIO
 from PIL import Image
-from plexapi.server import PlexServer
+from io import BytesIO
 
 import os
 import datetime
 import requests
+import xml.etree.ElementTree as ET
 import yaml
 
-with open('config.yml', 'r') as file:
-    config = yaml.safe_load(file)
+def get_library_details(plex_url,headers, library_names):
+    if plex_url:
+        url = f'{plex_url}/library/sections'
+        response = requests.get(url, headers=headers)
 
-# plex_root = config['plex_root']
-baseurl = config['baseurl']
-token = config['token']
-plex = PlexServer(baseurl, token)
+        if response.status_code == 200:
+            root = ET.fromstring(response.content)
 
-library_names = config['library_names']
-days_difference = config['days_difference']
-path_mapping = config['path_mapping']
+            library_details = []
 
-export_nfo = config['export_nfo']
-export_poster = config['export_poster']
-export_fanart = config['export_fanart']
+            for search_library in library_names:
+                directories = root.findall('Directory')
+                for library in directories:
+                    if library.attrib.get('title') == search_library:
+                        library_details.append({"key": library.attrib.get('key'), "type": library.attrib.get('type')})
 
-current_time = datetime.datetime.now()
+    return library_details
 
 def download_image(url, save_path):
     try:
@@ -36,161 +36,191 @@ def download_image(url, save_path):
     except Exception as e:
         print(f"[ERROR] An error occurred: {e}")
 
-def write_nfo(title, nfo_path, library_type, media_title):
+def write_nfo(config, nfo_path, library_type, meta_root, media_title):
     try:
-        other_ids = []
-
-        # get metadata agent id for plex's own new agents
-        if title.guids:
-            for guid in title.guids:
-                if library_type == 'tvshow':
-                    if 'imdb' in guid.id:
-                        other_ids.append({'id_tag': 'imdb_id', 'id_number': guid.id[guid.id.rfind("//")+2:]})
-                    elif 'tvdb' in guid.id:
-                        id_number = guid.id[guid.id.rfind("//")+2:]
-                        other_ids.append({'id_tag': 'tvdbid', 'id_number': guid.id[guid.id.rfind("//")+2:]})
-                    else:
-                        other_ids.append({'id_tag': guid.id[:guid.id.rfind(':')]+'id', 'id_number': guid.id[guid.id.rfind("//")+2:]})
-
-                elif library_type == 'Movie':
-                    if 'imdb' in guid.id:
-                        id_number = guid.id[guid.id.rfind("//")+2:]
-                        other_ids.append({'id_tag': 'imdbid', 'id_number': guid.id[guid.id.rfind("//")+2:]})
-                    else:
-                        other_ids.append({'id_tag': guid.id[:guid.id.rfind(':')]+'id', 'id_number': guid.id[guid.id.rfind("//")+2:]})
-        # get metadata agent id for other metadata agents
-        else:
-            guid = title.guid
-
-            if 'imdb:' in guid:
-                other_ids.append({'id_tag': 'imdbid', 'id_number': guid[guid.rfind("//")+2:(guid.rfind("?") if "?" in guid else len(guid))]})
-            elif 'tvdb:' in guid:
-                other_ids.append({'id_tag': 'tvdbid', 'id_number': guid[guid.rfind("//")+2:(guid.rfind("?") if "?" in guid else len(guid))]})
-            elif 'themoviedb:' in guid:
-                other_ids.append({'id_tag': 'tmdbid', 'id_number': guid[guid.rfind("//")+2:(guid.rfind("?") if "?" in guid else len(guid))]})
-            elif 'imdb' in guid:
-                id_number = guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]
-                other_ids.append({'id_tag': 'imdbid', 'id_number': id_number})
-            elif 'tvdb' in guid:
-                id_number = guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]
-                other_ids.append({'id_tag': 'tvdb', 'id_number': id_number})
-            elif 'anidb' in guid:
-                other_ids.append({'id_tag': 'anidbid', 'id_number': guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]})
-            elif 'themoviedb' in guid:
-                other_ids.append({'id_tag': 'tmdbid', 'id_number': guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]})            
-
         with open(nfo_path, 'w', encoding='utf-8') as nfo:
             nfo.write('<?xml version="1.0" encoding="UTF-8"?>\n')
             nfo.write(f'<{library_type} xsi="http://www.w3.org/2001/XMLSchema-instance" xsd="http://www.w3.org/2001/XMLSchema">\n')
 
-            try:
-                nfo.write(f'  <id>{id_number}</id>\n')
-            except:
-                pass
+            if config['agent_id'] and meta_root.get('guid'):
+                guid = meta_root.get('guid')
+                if 'themoviedb' in guid:
+                    nfo.write(f'  <tmdbid>{guid[guid.rfind("//")+2:(guid.rfind("?") if "?" in guid else len(guid))]}</tmdbid>\n')
 
-            if other_ids:
-                for other_id in other_ids:
-                    nfo.write(f'  <{other_id.get("id_tag")}>{other_id.get("id_number")}</{other_id.get("id_tag")}>\n')
+                if 'anidb' in guid:
+                    nfo.write(f'  <anidbid>{guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]}</anidbid>\n')
 
-            nfo.write(f'  <title>{media_title}</title>\n')
+                for agent in meta_root.findall('Guid'):
+                    agent_name = agent.get('id')[:agent.get('id').rfind(':')]+'id'
+                    agent_id = agent.get('id')[agent.get('id').find('//')+2:]
+                    nfo.write(f'  <{agent_name}>{agent_id}</{agent_name}>\n')
+                                                
+            if config['studio'] and meta_root.get('studio'):
+                nfo.write(f'  <studio>{meta_root.get("studio")}</studio>\n')
 
-            try:
-                nfo.write(f'  <plot>{title.summary}</plot>\n')
-            except:
-                pass
+            if config['title'] and meta_root.get('title'):
+                nfo.write(f'  <title>{meta_root.get("title")}</title>\n')
+                                                
+            if config['mpaa'] and meta_root.get('contentRating'):
+                nfo.write(f'  <mpaa>{meta_root.get("contentRating")}</mpaa>\n')
+                                                
+            if config['plot'] and meta_root.get('summary'):
+                nfo.write(f'  <plot>{meta_root.get("summary")}</plot>\n')
+                                                
+            if config['criticrating'] and meta_root.get('rating'):
+                nfo.write(f'  <criticrating>{meta_root.get("rating")}</criticrating>\n')
+                                                
+            if config['customrating'] and meta_root.get('userRating'):
+                nfo.write(f'  <customrating>{meta_root.get("userRating")}</customrating>\n')
+                                                
+            if config['year'] and meta_root.get('year'):
+                nfo.write(f'  <year>{meta_root.get("year")}</year>\n')
+                                                
+            if config['tagline'] and meta_root.get('tagline'):
+                nfo.write(f'  <tagline>{meta_root.get("tagline")}</tagline>\n')
+                                            
+            if config['runtime'] and meta_root.get('duration'):
+                nfo.write(f'  <runtime>{meta_root.get("duration")}</runtime>\n')
+                                            
+            if config['releasedate'] and meta_root.get('originallyAvailableAt'):
+                nfo.write(f'  <releasedate>{meta_root.get("originallyAvailableAt")}</releasedate>\n')
 
-            try:
-                nfo.write(f'  <year>{title.year}</year>\n')
-            except:
-                pass
+            if config['genre'] and meta_root.findall('Genre'):
+                for genre in meta_root.findall('Genre'):
+                    nfo.write(f'  <genre>{genre.get("tag")}</genre>\n')
 
-            # try:
-            #     nfo.write(f'  <mpaa>{title.contentRating}</mpaa>\n')
-            # except:
-            #     pass
+            if config['country'] and meta_root.findall('Country'):
+                for country in meta_root.findall('Country'):
+                    nfo.write(f'  <country>{country.get("tag")}</country>\n')
+
+            if config['ratings'] and meta_root.findall('Country'):
+                nfo.write('  <ratings>\n')
+                for rating in meta_root.findall('Rating'):
+                    nfo.write(f'    <{rating.get("type")}>{rating.get("value")}</{rating.get("type")}>\n')
+                nfo.write('  </ratings>\n')
+
+            if config['directors'] and meta_root.findall('Director'):
+                for director in meta_root.findall('Director'):
+                    nfo.write(f'  <director thumb={director.get("thumb")}>{director.get("tag")}</director>\n')
+
+            if config['writers'] and meta_root.findall('Writer'):
+                for writer in meta_root.findall('Writer'):
+                    nfo.write(f'  <writer thumb={writer.get("thumb")}>{writer.get("tag")}</writer>\n')
+
+            if config['roles'] and meta_root.findall('Role'):
+                for role in meta_root.findall('Role'):
+                    nfo.write(f'  <actor thumb={role.get("thumb")} role={role.get("role")}>{role.get("tag")}</actor>\n')
 
             nfo.write(f'</{library_type}>')
 
-            print(f'[SUCCESS] NFO successfully saved to {nfo_path}')
+            print(f'[SUCCESS] NFO for {media_title} successfully saved to {nfo_path}')
 
     except Exception as e:
         print(f'[FAILURE] Failed to write NFO for {media_title} due to {e}')
 
 def main():
-    for name in library_names:
-        for library in plex.library.sections():
-            if name.lower() == library.title.lower():
-                for title in library.search():
-                    media_title = title.title
+    with open('config.yml', 'r') as file:
+        config = yaml.safe_load(file)
 
-                    if 'Show' in type(library).__name__:
-                        nfo_path = title.locations[0] + '/' + 'tvshow.nfo'
-                        poster_path = title.locations[0] + '/' + 'poster.jpg'
-                        fanart_path = title.locations[0] + '/' + 'fanart.jpg'
-                        library_type = 'tvshow'
-                    else:
-                        nfo_path = title.locations[0][:title.locations[0].rfind('/')+1] + 'movie.nfo'
-                        poster_path = title.locations[0][:title.locations[0].rfind('/')+1] + 'poster.jpg'
-                        fanart_path = title.locations[0][:title.locations[0].rfind('/')+1] + 'fanart.jpg'
-                        library_type = 'Movie'
+    baseurl = config['baseurl']
+    token = config['token']
 
-                    for path_list in path_mapping:
-                        nfo_path = nfo_path.replace(path_list.get('plex'), path_list.get('local'))
-                        poster_path = poster_path.replace(path_list.get('plex'), path_list.get('local'))
-                        fanart_path = fanart_path.replace(path_list.get('plex'), path_list.get('local'))
+    library_names = config['library_names']
+    days_difference = config['days_difference']
+    path_mapping = config['path_mapping']
 
-                    if export_nfo is True:
-                        if os.path.exists(nfo_path):
-                            file_mod_time = datetime.datetime.fromtimestamp(os.path.getmtime(nfo_path))
-                            time_difference = current_time - file_mod_time
+    headers = {'X-Plex-Token': token}
+    library_details = get_library_details(baseurl,headers, library_names)
 
-                            if time_difference.days < days_difference:
-                                write_nfo(title, nfo_path, library_type, media_title)
-                            else:
-                                print(f'[SKIPPED] NFO for {media_title} skipped because there is NFO file older than {days_difference} days')
+    current_time = datetime.datetime.now()
 
-                        else:
-                            write_nfo(title, nfo_path, library_type, media_title)
+    for library in library_details:
+        if baseurl:
+            url = f'{baseurl}/library/sections/{library.get("key")}/all'
+            response = requests.get(url, headers=headers)
+            
+            if response.status_code == 200:
+                root = ET.fromstring(response.content)
+                if library.get('type') == 'movie':
+                    library_type = 'movie'
+                    library_root = 'Video'
+                elif library.get('type') == 'show':
+                    library_type = 'tvshow'
+                    library_root = 'Directory'
+                    
+                library_contents = root.findall(library_root)
+                for content in library_contents:
+                    ratingkey = content.get('ratingKey')
+                    meta_url = f'{baseurl}/library/metadata/{ratingkey}'
+                    meta_response = requests.get(meta_url, headers=headers)
+                    if meta_response.status_code == 200:
+                        meta_root = ET.fromstring(meta_response.content).find(library_root)
 
-                    if export_poster is True:
-                        try:
-                            if os.path.exists(poster_path):
-                                file_mod_time = datetime.datetime.fromtimestamp(os.path.getmtime(poster_path))
+                        media_title = meta_root.get('title')
+                        if library_type == 'movie':
+                            media_path = meta_root.find('Media').find('Part').get('file')
+                            media_path = media_path[:media_path.rfind("/")]+"/"
+                            for path_list in path_mapping:
+                                media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
+                        elif library_type == 'tvshow':
+                            media_path = meta_root.find('Location').get('path')+'/'
+                            for path_list in path_mapping:
+                                media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
+                                
+                        nfo_path = media_path + f'{library_type}.nfo'
+                        poster_path = media_path + 'poster.jpg'
+                        fanart_path = media_path + 'fanart.jpg'
+
+                        if config['export_nfo']:
+                            if os.path.exists(nfo_path):
+                                file_mod_time = datetime.datetime.fromtimestamp(os.path.getmtime(nfo_path))
                                 time_difference = current_time - file_mod_time
-                                            
+
                                 if time_difference.days < days_difference:
-                                    url = title.posterUrl
+                                    write_nfo(config, nfo_path, library_type, meta_root, media_title)
+                                else:
+                                    print(f'[SKIPPED] NFO for {media_title} skipped because there is NFO file older than {days_difference} days')
+
+                            else:
+                                write_nfo(config, nfo_path, library_type, meta_root, media_title)
+
+                        if config['export_poster']:
+                            try:
+                                url = baseurl+meta_root.get('thumb')
+                                if os.path.exists(poster_path):
+                                    file_mod_time = datetime.datetime.fromtimestamp(os.path.getmtime(poster_path))
+                                    time_difference = current_time - file_mod_time
+                                                        
+                                    if time_difference.days < days_difference:
+                                        download_image(url, poster_path)
+                                        print(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
+
+                                    else:
+                                        print(f'[SKIPPED] Poster for {media_title} skipped because there is poster file older than {days_difference} days')
+                                else:
                                     download_image(url, poster_path)
                                     print(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
+                            except:
+                                print(f'[FAILURE] Poster for {media_title} not found')
 
+                        if config['export_poster']:
+                            try:
+                                url = baseurl+meta_root.get('art')
+                                if os.path.exists(fanart_path):
+                                    file_mod_time = datetime.datetime.fromtimestamp(os.path.getmtime(fanart_path))
+                                    time_difference = current_time - file_mod_time
+                                                        
+                                    if time_difference.days < days_difference:
+                                        download_image(url, fanart_path)
+                                        print(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
+
+                                    else:
+                                        print(f'[SKIPPED] Art for {media_title} skipped because there is fanart file older than {days_difference} days')
                                 else:
-                                    print(f'[SKIPPED] Poster for {media_title} skipped because there is poster file older than {days_difference} days')
-                            else:
-                                url = title.posterUrl
-                                download_image(url, poster_path)
-                                print(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
-                        except:
-                            print(f'[FAILURE] Poster for {media_title} not found')
-
-                    if export_fanart is True:
-                        try:
-                            if os.path.exists(fanart_path):
-                                file_mod_time = datetime.datetime.fromtimestamp(os.path.getmtime(fanart_path))
-                                time_difference = current_time - file_mod_time
-                                            
-                                if time_difference.days < days_difference:
-                                    url = title.artUrl
                                     download_image(url, fanart_path)
-                                    print(f'[SUCCESS] Fanart successfully saved to {fanart_path}')
-
-                                else:
-                                    print(f'[SKIPPED] Fanart for {media_title} skipped because there is fanart file older than {days_difference} days')
-                            else:
-                                url = title.artUrl
-                                download_image(url, fanart_path)
-                                print(f'[SUCCESS] Fanart for {media_title} successfully saved to {fanart_path}')
-                        except:
-                            print(f'[FAILURE] Fanart for {media_title} not found')
+                                    print(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
+                            except:
+                                print(f'[FAILURE] Art for {media_title} not found')
 
 if __name__ == '__main__':    
     main()

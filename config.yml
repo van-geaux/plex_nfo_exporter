@@ -6,6 +6,7 @@
 # plex_root: '/docker/plex/Library/Application Support/Plex Media Server/'
 
 # change plex url and token here
+# !!!!!!! OMMIT THE LAST SLASH "/" !!!!!!!!
 baseurl: http://yourserveriporhostname:plexportopsional # i.e http://192.168.1.1:32400 or if reverse proxied i.e. https://plex.yourtld.com
 token: yourplextokenhere # how to get token https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/
 
@@ -35,3 +36,28 @@ path_mapping: [
         'local': '/volumeUSB2/usbshare/data'
     }
 ]
+
+################################ NFO options ################################
+
+# important
+# change only if you know you don't want these metadata
+title: true
+agent_id: true
+tagline: true
+plot: true
+year: true
+
+# optionals
+studio: true
+mpaa: true
+criticrating: true
+customrating: true
+runtime: true
+releasedate: true
+genre: true
+country: true
+ratings: true
+directors: true
+writers: true
+roles: true
+# producers: false # there's no equivalent in jellyfin metadata

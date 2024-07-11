@@ -2,7 +2,6 @@ certifi==2024.7.4
 charset-normalizer==3.3.2
 idna==3.7
 pillow==10.4.0
-PlexAPI==4.15.15
 PyYAML==6.0.1
 requests==2.32.3
 urllib3==2.2.2
