@@ -35,9 +35,9 @@ def get_library_details(plex_url,headers, library_names):
 
     return library_details
 
-def download_image(url, save_path):
+def download_image(url, headers, save_path):
     try:
-        response = requests.get(url)
+        response = requests.get(url, headers=headers)
         if response.status_code == 200:
             image = Image.open(BytesIO(response.content))
             image.save(save_path)
@@ -221,13 +221,13 @@ def main():
                                     time_difference = current_time - file_mod_time
                                                         
                                     if time_difference.days < days_difference:
-                                        download_image(url, poster_path)
+                                        download_image(url, headers, poster_path)
                                         print(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
 
                                     else:
                                         print(f'[SKIPPED] Poster for {media_title} skipped because there is poster file older than {days_difference} days')
                                 else:
-                                    download_image(url, poster_path)
+                                    download_image(url, headers, poster_path)
                                     print(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
                             except:
                                 print(f'[FAILURE] Poster for {media_title} not found')
@@ -240,13 +240,13 @@ def main():
                                     time_difference = current_time - file_mod_time
                                                         
                                     if time_difference.days < days_difference:
-                                        download_image(url, fanart_path)
+                                        download_image(url, headers, fanart_path)
                                         print(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
 
                                     else:
                                         print(f'[SKIPPED] Art for {media_title} skipped because there is fanart file older than {days_difference} days')
                                 else:
-                                    download_image(url, fanart_path)
+                                    download_image(url, headers, fanart_path)
                                     print(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
                             except:
                                 print(f'[FAILURE] Art for {media_title} not found')
