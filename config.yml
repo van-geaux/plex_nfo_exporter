@@ -1,18 +1,14 @@
 # config.yml
 # support environment variables in .env file
 
-# change PMS path here (not used anymore)
-# path before /Library/Application Support/Metadata
-# !!!!!!! DO NOT OMMIT THE LAST SLASH "/" !!!!!!!
-# plex_root: '/docker/plex/Library/Application Support/Plex Media Server/'
-
 # change plex url and token here
 # !!!!!!! OMMIT THE LAST SLASH "/" !!!!!!!!
 baseurl: ${PLEX_URL} # i.e http://192.168.1.1:32400 or if reverse proxied i.e. https://plex.yourtld.com
 token: ${PLEX_TOKEN} # how to get token https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/
 
 # input the libraries you want to export NFO/poster/fanart from
-library_names: ['Movies', 'TV Shows', 'Anime']
+# library_names: ['Movies', 'TV Shows', 'Anime']
+library_names: ['TV Shows']
 
 # minimum age (days) for NFO/poster/art not to be replaced
 # i.e setting 15 means any NFO/poster/art file older than 15 days will not be replaced
@@ -24,6 +20,7 @@ days_difference: 4
 export_nfo: true
 export_poster: false
 export_fanart: false
+export_episode_nfo: false
 
 # change/add path mapping if plex path is different from local (script) path
 # !!!!!!! OMMIT THE LAST SLASH "/" !!!!!!!!
@@ -35,13 +32,17 @@ path_mapping: [
     {
         'plex': '/usb2',
         'local': '/volumeUSB2/usbshare/data'
+    },
+    {
+        'plex': '/debrid',
+        'local': '/volume2/debrid'
     }
 ]
 
 ################################ NFO options ################################
 
 # important
-# change only if you know you don't want these metadata
+# set to false if you know you don't want these metadata
 title: true
 agent_id: true # will export all available metadata agent ids
 tagline: true
@@ -62,3 +63,6 @@ directors: false
 writers: false
 roles: false
 # producers: false # there's no equivalent in jellyfin metadata
+
+# log level defaults to info for console and warning for file
+log_level: 

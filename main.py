@@ -2,6 +2,8 @@ from dotenv import load_dotenv
 from io import BytesIO
 from PIL import Image
 
+from logger import logger
+
 import datetime
 import os
 import re
@@ -42,16 +44,16 @@ def download_image(url, headers, save_path):
             image = Image.open(BytesIO(response.content))
             image.save(save_path)
         else:
-            print(f"[ERROR] Failed to retrieve image. HTTP Status Code: {response.status_code}")
+            logger.error(f"Failed to retrieve image. HTTP Status Code: {response.status_code}")
     except Exception as e:
-        print(f"[ERROR] An error occurred: {e}")
+        logger.error(f"An error occurred: {e}")
 
-def write_nfo(config, nfo_path, library_type, meta_root, media_title):
+def write_nfo(config, nfo_path, library_type, meta_root, media_title, meta_url, headers):
     try:
         with open(nfo_path, 'w', encoding='utf-8') as nfo:
             nfo.write('<?xml version="1.0" encoding="UTF-8"?>\n')
             nfo.write(f'<{library_type} xsi="http://www.w3.org/2001/XMLSchema-instance" xsd="http://www.w3.org/2001/XMLSchema">\n')
-
+                
             if config['agent_id'] and meta_root.get('guid'):
                 guid = meta_root.get('guid')
                 if 'themoviedb' in guid:
@@ -64,44 +66,44 @@ def write_nfo(config, nfo_path, library_type, meta_root, media_title):
                     agent_name = agent.get('id')[:agent.get('id').rfind(':')]+'id'
                     agent_id = agent.get('id')[agent.get('id').find('//')+2:]
                     nfo.write(f'  <{agent_name}>{agent_id}</{agent_name}>\n')
-                                                
+                                                    
             if config['studio'] and meta_root.get('studio'):
                 nfo.write(f'  <studio>{meta_root.get("studio")}</studio>\n')
 
             if config['title'] and meta_root.get('title'):
                 nfo.write(f'  <title>{meta_root.get("title")}</title>\n')
-                                                
+                                                    
             if config['mpaa'] and meta_root.get('contentRating'):
                 nfo.write(f'  <mpaa>{meta_root.get("contentRating")}</mpaa>\n')
-                                                
+                                                    
             if config['plot'] and meta_root.get('summary'):
                 nfo.write(f'  <plot>{meta_root.get("summary")}</plot>\n')
-                                                
+                                                    
             if config['criticrating'] and meta_root.get('rating'):
                 nfo.write(f'  <criticrating>{meta_root.get("rating")}</criticrating>\n')
-                                                
+                                                    
             if config['customrating'] and meta_root.get('userRating'):
                 nfo.write(f'  <customrating>{meta_root.get("userRating")}</customrating>\n')
-                                                
+                                                    
             if config['year'] and meta_root.get('year'):
                 nfo.write(f'  <year>{meta_root.get("year")}</year>\n')
-                                                
+                                                    
             if config['tagline'] and meta_root.get('tagline'):
                 nfo.write(f'  <tagline>{meta_root.get("tagline")}</tagline>\n')
-                                            
+                                                
             if config['runtime'] and meta_root.get('duration'):
                 nfo.write(f'  <runtime>{meta_root.get("duration")}</runtime>\n')
-                                            
+                                                
             if config['releasedate'] and meta_root.get('originallyAvailableAt'):
                 nfo.write(f'  <releasedate>{meta_root.get("originallyAvailableAt")}</releasedate>\n')
 
             if config['genre'] and meta_root.findall('Genre'):
                 for genre in meta_root.findall('Genre'):
-                    nfo.write(f'  <genre>{genre.get("tag")}</genre>\n')
+                        nfo.write(f'  <genre>{genre.get("tag")}</genre>\n')
 
             if config['country'] and meta_root.findall('Country'):
                 for country in meta_root.findall('Country'):
-                    nfo.write(f'  <country>{country.get("tag")}</country>\n')
+                        nfo.write(f'  <country>{country.get("tag")}</country>\n')
 
             if config['ratings'] and meta_root.findall('Rating'):
                 nfo.write('  <ratings>\n')
@@ -137,10 +139,55 @@ def write_nfo(config, nfo_path, library_type, meta_root, media_title):
 
             nfo.write(f'</{library_type}>')
 
-            print(f'[SUCCESS] NFO for {media_title} successfully saved to {nfo_path}')
+            logger.info(f'[SUCCESS] NFO for {media_title} successfully saved to {nfo_path}')
 
     except Exception as e:
-        print(f'[FAILURE] Failed to write NFO for {media_title} due to {e}')
+        logger.error(f'[FAILURE] Failed to write NFO for {media_title} due to {e}')
+
+def write_episode_nfo(episode_nfo_path, episode_root, media_title):
+    try:
+        with open(episode_nfo_path, 'w', encoding='utf-8') as nfo:
+            nfo.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+            nfo.write('<episodedetails xsi="http://www.w3.org/2001/XMLSchema-instance" xsd="http://www.w3.org/2001/XMLSchema">\n')
+
+            if episode_root.findall('Guid'):
+                for guid in episode_root.findall('Guid'):
+                    if 'imdb' in guid.get('id'):
+                        utype = 'imdb'
+                    elif 'tmdb' in guid.get('id'):
+                        utype = 'tmdb'
+                    elif 'tvdb' in guid.get('id'):
+                        utype = 'tvdb'
+                                            
+                    nfo.write(f'  <uniqueid type="{utype}">{guid.get("id")[guid.get("id").rfind("/")+1:]}</uniqueid>\n')
+
+            if episode_root.get('parentIndex'):
+                nfo.write(f'  <season>{episode_root.get("parentIndex")}</season>\n')
+
+            if episode_root.get('index'):
+                nfo.write(f'  <episode>{episode_root.get("index")}</episode>\n')
+
+            if episode_root.get('title'):
+                nfo.write(f'  <title>{episode_root.get("title")}</title>\n')
+
+            if episode_root.get('summary'):
+                nfo.write(f'  <plot>{episode_root.get("summary")}</plot>\n')
+
+            if episode_root.get('contentRating'):
+                nfo.write(f'  <mpaa>{episode_root.get('contentRating')}</mpaa>\n')
+
+            if episode_root.get('rating'):
+                nfo.write(f'  <userrating>{episode_root.get('rating')}</userrating>\n')
+
+            if episode_root.get('originallyAvailableAt'):
+                nfo.write(f'  <aired>{episode_root.get('originallyAvailableAt')}</aired>\n')
+
+            nfo.write('</episodedetails>')
+
+            logger.info(f'[SUCCESS] Episodic NFO for {media_title} successfully saved to {episode_nfo_path}')
+
+    except Exception as e:
+        logger.error(f'[FAILURE] Failed to write episodic NFO for {media_title} due to {e}')
 
 def main():
     load_dotenv()
@@ -206,12 +253,55 @@ def main():
                                 time_difference = current_time - file_mod_time
 
                                 if time_difference.days < days_difference:
-                                    write_nfo(config, nfo_path, library_type, meta_root, media_title)
+                                    write_nfo(config, nfo_path, library_type, meta_root, media_title, meta_url, headers)
                                 else:
-                                    print(f'[SKIPPED] NFO for {media_title} skipped because there is NFO file older than {days_difference} days')
+                                    logger.info(f'[SKIPPED] NFO for {media_title} skipped because there is NFO file older than {days_difference} days')
 
                             else:
-                                write_nfo(config, nfo_path, library_type, meta_root, media_title)
+                                write_nfo(config, nfo_path, library_type, meta_root, media_title, meta_url, headers)
+
+                        if config['export_episode_nfo'] and (library_type == 'tvshow'):
+                            try:
+                                meta_season = meta_url + '/children'
+                                meta_season_response = requests.get(meta_season, headers=headers)
+                                if meta_season_response.status_code == 200:
+                                    meta_season_root = ET.fromstring(meta_season_response.content).findall('Directory')
+
+                                    for season in meta_season_root[1:]:
+                                        season_key = season.get('ratingKey')
+
+                                        season_url = meta_url[:meta_url.rfind('/')] + '/' + season_key + '/children'
+                                        season_url_response = requests.get(season_url, headers=headers)
+                                        if season_url_response.status_code == 200:
+                                            season_root = ET.fromstring(season_url_response.content).findall('Video')
+
+                                            for episode in season_root:
+                                                episode_key = episode.get('ratingKey')
+
+                                                episode_url = meta_url[:meta_url.rfind('/')] + '/' + episode_key
+                                                episode_url_response = requests.get(episode_url, headers=headers)
+                                                episode_root = ET.fromstring(episode_url_response.content).find('Video')
+
+                                                episode_path = episode_root.find('Media').find('Part').get('file')
+                                                episode_nfo_path = episode_path[:episode_path.rfind('.')] + '.nfo'
+
+                                                for path_list in path_mapping:
+                                                    episode_nfo_path = episode_nfo_path.replace(path_list.get('plex'), path_list.get('local'))
+
+                                                if os.path.exists(episode_nfo_path):
+                                                    file_mod_time = datetime.datetime.fromtimestamp(os.path.getmtime(episode_nfo_path))
+                                                    time_difference = current_time - file_mod_time
+
+                                                    if time_difference.days < days_difference:
+                                                        write_episode_nfo(episode_nfo_path, episode_root, media_title)
+                                                    else:
+                                                        logger.info(f'[SKIPPED] Episodic NFO for {media_title} skipped because there is NFO file older than {days_difference} days')
+
+                                                else:
+                                                    write_episode_nfo(episode_nfo_path, episode_root, media_title)
+
+                            except Exception as e:
+                                logger.error(f'[FAILURE] Failed to write episodic NFO for {media_title} due to {e}')
 
                         if config['export_poster']:
                             try:
@@ -222,17 +312,17 @@ def main():
                                                         
                                     if time_difference.days < days_difference:
                                         download_image(url, headers, poster_path)
-                                        print(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
+                                        logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
 
                                     else:
-                                        print(f'[SKIPPED] Poster for {media_title} skipped because there is poster file older than {days_difference} days')
+                                        logger.info(f'[SKIPPED] Poster for {media_title} skipped because there is poster file older than {days_difference} days')
                                 else:
                                     download_image(url, headers, poster_path)
-                                    print(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
+                                    logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
                             except:
-                                print(f'[FAILURE] Poster for {media_title} not found')
+                                logger.info(f'[FAILURE] Poster for {media_title} not found')
 
-                        if config['export_poster']:
+                        if config['export_fanart']:
                             try:
                                 url = baseurl+meta_root.get('art')
                                 if os.path.exists(fanart_path):
@@ -241,15 +331,15 @@ def main():
                                                         
                                     if time_difference.days < days_difference:
                                         download_image(url, headers, fanart_path)
-                                        print(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
+                                        logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
 
                                     else:
-                                        print(f'[SKIPPED] Art for {media_title} skipped because there is fanart file older than {days_difference} days')
+                                        logger.info(f'[SKIPPED] Art for {media_title} skipped because there is fanart file older than {days_difference} days')
                                 else:
                                     download_image(url, headers, fanart_path)
-                                    print(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
+                                    logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
                             except:
-                                print(f'[FAILURE] Art for {media_title} not found')
+                                logger.info(f'[FAILURE] Art for {media_title} not found')
 
 if __name__ == '__main__':    
     main()
