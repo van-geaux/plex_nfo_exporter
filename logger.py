@@ -7,7 +7,8 @@ import shutil
 import yaml
 
 # if logs folder not exist then create it
-
+if not os.path.exists('logs/'):
+    os.makedirs('logs/')
 
 # check and delete oldest log
 files = list(Path('logs/').iterdir())
