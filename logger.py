@@ -3,7 +3,6 @@ from pathlib import Path
 
 import logging
 import os
-import shutil
 import yaml
 
 # Check if the logs path exist
