@@ -7,8 +7,7 @@ baseurl: ${PLEX_URL} # i.e http://192.168.1.1:32400 or if reverse proxied i.e. h
 token: ${PLEX_TOKEN} # how to get token https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/
 
 # input the libraries you want to export NFO/poster/fanart from
-# library_names: ['Movies', 'TV Shows', 'Anime']
-library_names: ['TV Shows']
+library_names: ['Movies', 'TV Shows', 'Anime']
 
 # minimum age (days) for NFO/poster/art not to be replaced
 # i.e setting 15 means any NFO/poster/art file older than 15 days will not be replaced
