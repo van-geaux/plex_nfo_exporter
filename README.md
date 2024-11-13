@@ -9,6 +9,8 @@
 8. Option to choose which metadata to export, able to export all metadata from plex
 9. Support separated plex and library servers with path mapping
 
+10. Now also support music library
+
 # How to use
 1. Download the repo and put it anywhere you like
 2. Make sure there are at least config.yml, main.py, and requirements.txt files in it

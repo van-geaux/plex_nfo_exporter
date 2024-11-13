@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from dotenv import load_dotenv
 from io import BytesIO
 from PIL import Image
@@ -42,6 +44,10 @@ def download_image(url, headers, save_path):
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             image = Image.open(BytesIO(response.content))
+
+            if image.mode == "RGBA":
+                image = image.convert("RGB")
+
             image.save(save_path)
         else:
             logger.error(f"Failed to retrieve image. HTTP Status Code: {response.status_code}")
@@ -99,11 +105,15 @@ def write_nfo(config, nfo_path, library_type, meta_root, media_title, meta_url, 
 
             if config['genre'] and meta_root.findall('Genre'):
                 for genre in meta_root.findall('Genre'):
-                        nfo.write(f'  <genre>{genre.get("tag")}</genre>\n')
+                    nfo.write(f'  <genre>{genre.get("tag")}</genre>\n')
 
             if config['country'] and meta_root.findall('Country'):
                 for country in meta_root.findall('Country'):
-                        nfo.write(f'  <country>{country.get("tag")}</country>\n')
+                    nfo.write(f'  <country>{country.get("tag")}</country>\n')
+
+            if config['style'] and meta_root.findall('Style'):
+                for style in meta_root.findall('Style'):
+                    nfo.write(f'  <style>{style.get("tag")}</style>\n')
 
             if config['ratings'] and meta_root.findall('Rating'):
                 nfo.write('  <ratings>\n')
@@ -206,13 +216,18 @@ def main():
     path_mapping = config['path_mapping']
 
     headers = {'X-Plex-Token': token}
-    library_details = get_library_details(baseurl,headers, library_names)
+    library_details = get_library_details(baseurl, headers, library_names)
 
     current_time = datetime.datetime.now()
+    check_music = 0
 
     for library in library_details:
         if baseurl:
-            url = f'{baseurl}/library/sections/{library.get("key")}/all'
+            if check_music == 0:
+                url = f'{baseurl}/library/sections/{library.get("key")}/all'
+            else:
+                url = f'{baseurl}/library/sections/{library.get("key")}/albums'
+
             response = requests.get(url, headers=headers)
             
             if response.status_code == 200:
@@ -223,10 +238,18 @@ def main():
                 elif library.get('type') == 'show':
                     library_type = 'tvshow'
                     library_root = 'Directory'
+                elif library.get('type') and check_music == 0:
+                    library_type = 'artist'
+                    library_root = 'Directory'
+                    check_music += 1
+                elif check_music == 1:
+                    library_type = 'albums'
+                    library_root = 'Directory'
+                    check_music -= 1
                     
                 library_contents = root.findall(library_root)
                 for content in library_contents:
-                    ratingkey = content.get('ratingKey')
+                    ratingkey = content.get('ratingKey')    
                     meta_url = f'{baseurl}/library/metadata/{ratingkey}'
                     meta_response = requests.get(meta_url, headers=headers)
                     if meta_response.status_code == 200:
@@ -242,8 +265,25 @@ def main():
                             media_path = meta_root.find('Location').get('path')+'/'
                             for path_list in path_mapping:
                                 media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
+                        elif library_type == 'artist':
+                            media_path = meta_root.find('Location').get('path')+'/'
+                            for path_list in path_mapping:
+                                media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
+                        elif library_type == 'albums':
+                            track_url = f'{meta_url}/children'
+                            track_response = requests.get(track_url, headers=headers)
+                            track0_path = ET.fromstring(track_response.content).findall('Track')[0].find('Media').find('Part').get('file')
+                            media_path = track0_path[:track0_path.rfind('/')]+'/'
+                            for path_list in path_mapping:
+                                media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
                                 
-                        nfo_path = media_path + f'{library_type}.nfo'
+                        if library_type == 'artist':
+                            nfo_path = media_path + 'artist.nfo'
+                        elif library_type == 'albums':
+                            nfo_path = media_path + 'album.nfo'
+                        else:
+                            nfo_path = media_path + f'{library_type}.nfo'
+
                         poster_path = media_path + 'poster.jpg'
                         fanart_path = media_path + 'fanart.jpg'
 
