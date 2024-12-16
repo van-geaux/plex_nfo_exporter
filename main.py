@@ -1,29 +1,175 @@
 #!/usr/bin/env python3
 
+from datetime import datetime
 from dotenv import load_dotenv
 from io import BytesIO
+from pathlib import Path
 from PIL import Image
+from urllib.parse import urljoin
 
-from logger import logger
-
-import datetime
+import logging
 import os
 import re
 import requests
+import sys
 import xml.etree.ElementTree as ET
 import yaml
 
+def set_logger():
+    if not os.path.exists('/logs'):
+        os.makedirs('/logs')
+
+    files = list(Path('logs/').iterdir())
+    files = [f for f in files if f.is_file()]
+    if len(files) > 10:
+        files.sort(key=lambda f: f.stat().st_mtime)
+        oldest_file = files[0]
+        os.remove(oldest_file)
+        print(f"Deleted: {oldest_file}")
+    else:
+        pass
+
+    with open('config.yml', 'r') as file:
+        config_content = file.read()
+        config = yaml.safe_load(config_content)
+    try:
+        log_level_str = config.get('log_level').upper()
+    except:
+        log_level_str = 'other'
+
+    log_level_console = getattr(logging, log_level_str, logging.INFO)
+    log_level_file = getattr(logging, log_level_str, logging.WARNING)
+
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+
+    console_handler = logging.StreamHandler()
+    file_handler = logging.FileHandler(f"logs/app-{str(datetime.now().date()).replace('-', '')}.log", encoding='utf-8')
+
+    console_handler.setLevel(log_level_console)
+    file_handler.setLevel(log_level_file)
+
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    console_handler.setFormatter(formatter)
+    file_handler.setFormatter(formatter)
+
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+
+    return logger
+
+def ensure_env_file_exists() -> None:
+    """
+    Create .env with placeholder if not exist
+    """
+    default_content = "PLEX_URL='http://192.168.1.2:32400'\nPLEX_TOKEN='very-long-token'"
+    file_path = '.env'
+    if not os.path.exists(file_path):
+        with open(file_path, 'w') as env_file:
+            env_file.write(default_content)
+        print(f"{file_path} created, if you haven't put your Plex's url and token in the config then please put them in the .env")
+        sys.exit()
+    else:
+        print(f"{file_path} already exists.")
+
+def ensure_config_file_exists() -> None:
+    default_content = """# config.yml
+
+# change plex url and token here
+Base URL: ${PLEX_URL} # i.e http://192.168.1.1:32400 or if reverse proxied i.e. https://plex.yourdomain.tld or fill them in .env file and let this part be
+Token: ${PLEX_TOKEN} # how to get token https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/ or fill them in .env file and let this part be
+
+# input the libraries you want to export NFO/poster/fanart from
+# if the library type is music, input it TWICE. This is due to plex have 2 different roots for music library, each for artist and albums
+Libraries: ['Movies', 'TV Shows', 'Anime', 'Music', 'Music']
+
+# minimum age (days) for NFO/poster/art not to be replaced
+# i.e setting 15 means any NFO/poster/art file older than 15 days will not be replaced
+# !!!!!!! set lower than how often you plan to run the script !!!!!!!
+days_difference: 4
+
+# true/false choose what to export
+Export NFO: true
+Export poster: false
+Export fanart: false
+Export episode NFO: false
+
+Mode: copy
+
+# change/add path mapping if plex path is different from local (script) path
+Path mapping: [
+    {
+        'plex': '/data_media',
+        'local': '/volume1/data/media'
+    },
+    {
+        'plex': '/usb2',
+        'local': '/volumeUSB2/usbshare/data'
+    },
+    {
+        'plex': '/debrid',
+        'local': '/volume2/debrid'
+    }
+]
+
+################################ NFO options ################################
+
+# important
+# set to false if you know you don't want these metadata
+title: true
+agent_id: true # will export all available metadata agent ids
+tagline: true
+plot: true
+year: true
+
+# optionals
+studio: false
+mpaa: false
+criticrating: false
+customrating: false
+runtime: false
+releasedate: false
+genre: false
+country: false
+style: false
+ratings: false
+directors: false
+writers: false
+roles: false
+# producers: false # there's no equivalent in jellyfin metadata
+
+# log level defaults to info for console and warning for file
+log_level: 
+"""
+    file_path = 'config.yml'
+    if not os.path.exists(file_path):
+        with open(file_path, 'w') as env_file:
+            env_file.write(default_content)
+        print(f"{file_path} created, if you haven't set your config then please put them in the config.yml")
+        sys.exit()
+    else:
+        print(f"{file_path} already exists.")
+
 def env_var_constructor(loader, node):
+    """
+    Custom YAML constructor to replace environment variable placeholders in the YAML string.
+    Replaces ${VAR_NAME} with the actual environment variable value.
+    """
     value = loader.construct_scalar(node)
     pattern = re.compile(r'\$\{(\w+)\}')
     match = pattern.findall(value)
     for var in match:
         value = value.replace(f'${{{var}}}', os.getenv(var, ''))
+
     return value
 
-def get_library_details(plex_url,headers, library_names):
+
+def get_library_details(plex_url:str, headers:dict, library_names:list) -> list:
+    """
+    Get details about available libraries
+    """
     if plex_url:
-        url = f'{plex_url}/library/sections'
+        url = urljoin(plex_url, '/library/sections')
         response = requests.get(url, headers=headers)
 
         if response.status_code == 200:
@@ -39,7 +185,10 @@ def get_library_details(plex_url,headers, library_names):
 
     return library_details
 
-def download_image(url, headers, save_path):
+def download_image(url:str, headers:dict, save_path:str) -> None:
+    """
+    Download image from provided url, also convert RGBA to RGB
+    """
     try:
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
@@ -54,7 +203,7 @@ def download_image(url, headers, save_path):
     except Exception as e:
         logger.error(f"An error occurred: {e}")
 
-def write_nfo(config, nfo_path, library_type, meta_root, media_title, meta_url, headers):
+def write_nfo(config:dict, nfo_path:str, library_type:str, meta_root:str, media_title:str) -> None:
     try:
         with open(nfo_path, 'w', encoding='utf-8') as nfo:
             nfo.write('<?xml version="1.0" encoding="UTF-8"?>\n')
@@ -208,25 +357,25 @@ def main():
         config_content = re.sub(r'\$\{(\w+)\}', lambda match: os.getenv(match.group(1), ''), config_content)
         config = yaml.safe_load(config_content)
 
-    baseurl = config['baseurl']
-    token = config['token']
+    baseurl = config['Base URL']
+    token = config['Token']
 
-    library_names = config['library_names']
+    library_names = config['Libraries']
     days_difference = config['days_difference']
-    path_mapping = config['path_mapping']
+    path_mapping = config['Path mapping']
 
     headers = {'X-Plex-Token': token}
     library_details = get_library_details(baseurl, headers, library_names)
 
-    current_time = datetime.datetime.now()
+    current_time = datetime.now()
     check_music = 0
 
     for library in library_details:
         if baseurl:
             if check_music == 0:
-                url = f'{baseurl}/library/sections/{library.get("key")}/all'
+                url = urljoin(baseurl, f'/library/sections/{library.get("key")}/all')
             else:
-                url = f'{baseurl}/library/sections/{library.get("key")}/albums'
+                url = urljoin(baseurl, f'/library/sections/{library.get("key")}/albums')
 
             response = requests.get(url, headers=headers)
             
@@ -249,8 +398,8 @@ def main():
                     
                 library_contents = root.findall(library_root)
                 for content in library_contents:
-                    ratingkey = content.get('ratingKey')    
-                    meta_url = f'{baseurl}/library/metadata/{ratingkey}'
+                    ratingkey = content.get('ratingKey')  
+                    meta_url = urljoin(baseurl, f'/library/metadata/{ratingkey}')  
                     meta_response = requests.get(meta_url, headers=headers)
                     if meta_response.status_code == 200:
                         meta_root = ET.fromstring(meta_response.content).find(library_root)
@@ -270,7 +419,7 @@ def main():
                             for path_list in path_mapping:
                                 media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
                         elif library_type == 'albums':
-                            track_url = f'{meta_url}/children'
+                            track_url = urljoin(meta_url, '/children')
                             track_response = requests.get(track_url, headers=headers)
                             track0_path = ET.fromstring(track_response.content).findall('Track')[0].find('Media').find('Part').get('file')
                             media_path = track0_path[:track0_path.rfind('/')]+'/'
@@ -278,31 +427,31 @@ def main():
                                 media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
                                 
                         if library_type == 'artist':
-                            nfo_path = media_path + 'artist.nfo'
+                            nfo_path = os.path.join(media_path, 'artist.nfo')
                         elif library_type == 'albums':
-                            nfo_path = media_path + 'album.nfo'
+                            nfo_path = os.path.join(media_path, 'album.nfo')
                         else:
-                            nfo_path = media_path + f'{library_type}.nfo'
+                            nfo_path = os.path.join(media_path, f'{library_type}.nfo')
 
-                        poster_path = media_path + 'poster.jpg'
-                        fanart_path = media_path + 'fanart.jpg'
+                        poster_path = os.path.join(media_path, 'poster.jpg')
+                        fanart_path = os.path.join(media_path, 'fanart.jpg')
 
-                        if config['export_nfo']:
+                        if config['Export NFO']:
                             if os.path.exists(nfo_path):
-                                file_mod_time = datetime.datetime.fromtimestamp(os.path.getmtime(nfo_path))
+                                file_mod_time = datetime.fromtimestamp(os.path.getmtime(nfo_path))
                                 time_difference = current_time - file_mod_time
 
                                 if time_difference.days < days_difference:
-                                    write_nfo(config, nfo_path, library_type, meta_root, media_title, meta_url, headers)
+                                    write_nfo(config, nfo_path, library_type, meta_root, media_title)
                                 else:
                                     logger.info(f'[SKIPPED] NFO for {media_title} skipped because there is NFO file older than {days_difference} days')
 
                             else:
-                                write_nfo(config, nfo_path, library_type, meta_root, media_title, meta_url, headers)
+                                write_nfo(config, nfo_path, library_type, meta_root, media_title)
 
-                        if config['export_episode_nfo'] and (library_type == 'tvshow'):
+                        if config['Export episode NFO'] and (library_type == 'tvshow'):
                             try:
-                                meta_season = meta_url + '/children'
+                                meta_season = urljoin(meta_url, '/children')
                                 meta_season_response = requests.get(meta_season, headers=headers)
                                 if meta_season_response.status_code == 200:
                                     meta_season_root = ET.fromstring(meta_season_response.content).findall('Directory')
@@ -310,7 +459,7 @@ def main():
                                     for season in meta_season_root[1:]:
                                         season_key = season.get('ratingKey')
 
-                                        season_url = meta_url[:meta_url.rfind('/')] + '/' + season_key + '/children'
+                                        season_url = urljoin(meta_url[:meta_url.rfind('/')], f'{season_key}/children')
                                         season_url_response = requests.get(season_url, headers=headers)
                                         if season_url_response.status_code == 200:
                                             season_root = ET.fromstring(season_url_response.content).findall('Video')
@@ -318,7 +467,7 @@ def main():
                                             for episode in season_root:
                                                 episode_key = episode.get('ratingKey')
 
-                                                episode_url = meta_url[:meta_url.rfind('/')] + '/' + episode_key
+                                                episode_url = urljoin(meta_url[:meta_url.rfind('/')], episode_key)
                                                 episode_url_response = requests.get(episode_url, headers=headers)
                                                 episode_root = ET.fromstring(episode_url_response.content).find('Video')
 
@@ -329,7 +478,7 @@ def main():
                                                     episode_nfo_path = episode_nfo_path.replace(path_list.get('plex'), path_list.get('local'))
 
                                                 if os.path.exists(episode_nfo_path):
-                                                    file_mod_time = datetime.datetime.fromtimestamp(os.path.getmtime(episode_nfo_path))
+                                                    file_mod_time = datetime.fromtimestamp(os.path.getmtime(episode_nfo_path))
                                                     time_difference = current_time - file_mod_time
 
                                                     if time_difference.days < days_difference:
@@ -343,11 +492,11 @@ def main():
                             except Exception as e:
                                 logger.error(f'[FAILURE] Failed to write episodic NFO for {media_title} due to {e}')
 
-                        if config['export_poster']:
+                        if config['Export poster']:
                             try:
-                                url = baseurl+meta_root.get('thumb')
+                                url = urljoin(baseurl, meta_root.get('thumb'))
                                 if os.path.exists(poster_path):
-                                    file_mod_time = datetime.datetime.fromtimestamp(os.path.getmtime(poster_path))
+                                    file_mod_time = datetime.fromtimestamp(os.path.getmtime(poster_path))
                                     time_difference = current_time - file_mod_time
                                                         
                                     if time_difference.days < days_difference:
@@ -362,11 +511,11 @@ def main():
                             except:
                                 logger.info(f'[FAILURE] Poster for {media_title} not found')
 
-                        if config['export_fanart']:
+                        if config['Export fanart']:
                             try:
-                                url = baseurl+meta_root.get('art')
+                                url = urljoin(baseurl, meta_root.get('art'))
                                 if os.path.exists(fanart_path):
-                                    file_mod_time = datetime.datetime.fromtimestamp(os.path.getmtime(fanart_path))
+                                    file_mod_time = datetime.fromtimestamp(os.path.getmtime(fanart_path))
                                     time_difference = current_time - file_mod_time
                                                         
                                     if time_difference.days < days_difference:
@@ -381,5 +530,8 @@ def main():
                             except:
                                 logger.info(f'[FAILURE] Art for {media_title} not found')
 
-if __name__ == '__main__':    
+if __name__ == '__main__':
+    ensure_config_file_exists()
+    ensure_env_file_exists()  
+    logger = set_logger()
     main()

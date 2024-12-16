@@ -152,5 +152,6 @@ cython_debug/
 #.idea/
 
 /test*
+/logs*
 
 *ipynb
