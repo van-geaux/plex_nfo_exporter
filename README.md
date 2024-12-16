@@ -1,48 +1,103 @@
-# What this do
-1. Extract media info from Plex and put them into an NFO file
-2. Extract active poster image from Plex
-3. Extract active art (background art) from Plex
-4. Put all of them in media directory as tvshow/movie.nfo, poster.jpg, and fanart.jpg to be use on other media server i.e. Jellyfin
-5. Do it all without refreshing library metadata
-6. Option to choose what to export
-7. Option to choose which library to process
-8. Option to choose which metadata to export, able to export all metadata from plex
-9. Support separated plex and library servers with path mapping
+# Plex NFO Exporter
 
-10. Now also support music library
+**Plex NFO Exporter** is a script that extracts metadata, posters, and background art from Plex and generates compatible files for use with other media servers like Jellyfin.  
 
-# How to use
-1. Download the repo and put it anywhere you like
-2. Make sure there are at least config.yml, main.py, and requirements.txt files in it
-3. Fill in the details in config.yml
-4. Install python on your system if haven't already (I use python 3.12 but I've confirmed it works with 3.8 also)
-5. CD to the script directory
-   ```cd /your_directory/plex_nfo_exporter```
-6. (optional) Create a virtual environment
-   ```python -m venv env``` 
-8. (optional) Activate virtual environment
-   ```env\Scripts\activate``` for windows or ```source env/bin/activate```
-10. Install dependencies
-    ```pip install -r requirements.txt``` 
-12. Run the script
-    ```python main.py```
+---
 
-# Features and limitations
-1. It support the new plex's tv and movie agent
-2. It will also detect [Hama agent](https://github.com/ZeroQI/Hama.bundle) and other agents and set their metadata source ids accordingly
-3. Option to choose what metadata to export, you can get all if you want to but default to title, metadata agent ids, tagline, plot, and year to let jellyfin pull whatever other metadata not in the nfo file
-4. For a mixed (tv and movie) library, it will save the NFO as tvshow.nfo
-5. The images pulled as poster.jpg and fanart.jpg are the current active images in plex
-6. That way plex and jellyfin should show practically the same library (in image, media names, and metadata)
-7. I tried to make a docker image with cron job for better convenience but still fails, I will learn more and hope I can do it in the near future
+## Features
+- Extract media metadata from Plex into `.nfo` files.
+- Export active poster images as `poster.jpg`.
+- Export active background art as `fanart.jpg`.
+- Save files in the media directory for easy use with other media servers.
+- **Does not refresh Plex library metadata** during the export process.
+- Flexible options:
+  - Choose what metadata to export (e.g., title, tagline, plot, year, etc.).
+  - Select specific libraries to process.
+  - Export all metadata from Plex if needed.
+- Support for path mapping between separate Plex and library servers.
+- Compatible with **movies**, **TV shows**, and **music** libraries.
+- Supports Plex's latest movie and TV agents, as well as [Hama agent](https://github.com/ZeroQI/Hama.bundle).  
 
-# A little background
-1. I'm not a developer by trade
-2. I run both Plex and Jellyfin because Plex is convenient and Jellyfin is flexible
-3. My main library is anime in Plex using Hama agent using romaji names
-4. I also use [Kometa](https://kometa.wiki/en/latest/) to beautify the posters
-5. My library in plex and jellyfin looks very different because of that
-6. I've searched a while for tools/scripts to export NFO and images from plex to be used in jellyfin but
-7. [Lambda](https://github.com/ZeroQI/Lambda.bundle) needs to refresh the whole library the first time and doesn't work well with Kometa because for new media it will export whatever poster and art pulled from metadata because Kometa hasn't run
-8. [XBMC importer](https://github.com/gboudreau/XBMCnfoMoviesImporter.bundle) only import things from NFO to plex AFAIK
-9. [Googled it](https://www.google.com/search?q=github+plex+nfo+export&sca_esv=71668abf73626b35&sca_upv=1&sxsrf=ADLYWIK0jN_WTI2xC-noSKYKXW4ISmPJ4w%3A1720488444387&ei=_JGMZvywF5-gnesP6pMt) but I didn't find what I need
+---
+
+## How to Use
+
+1. **Download and Prepare the Script**  
+   Clone or download the repository, ensuring the following files are included:  
+   - `config.yml` (will create if not exists)
+   - `.env` (will create if not exists)
+   - `main.py`  
+   - `requirements.txt`  
+
+2. **Configure the Script**  
+   Edit `config.yml` and `.env` to include your desired settings and credentials.
+
+3. **Install Python**  
+   Install Python (tested with Python 3.9–3.11).  
+
+4. **Set Up the Environment**  
+   Open a terminal and navigate to the script directory:  
+   ```bash
+   cd /your_directory/plex_nfo_exporter
+   ```
+
+   (Optional) Create and activate a virtual environment:
+   ```bash
+   python -m venv env  
+   env\Scripts\activate    # Windows  
+   source env/bin/activate # macOS/Linux
+   ```
+
+5. **Install Dependencies**
+   Install the required Python packages:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+6. **Run the Script**
+   Execute the script:
+   ```bash
+   python main.py
+   ```
+   
+## Features and Limitations
+
+1. **Supported Plex Agents**
+   - Compatible with Plex's new TV and movie agents.
+   - Detects Hama agent and other agents to set metadata source IDs accordingly.
+
+2. **Metadata Export Options**
+   - Choose specific metadata fields to export.
+   - Defaults include title, tagline, plot, year, and metadata agent IDs.
+
+3. **File Organization**
+   - Saves .nfo files as movie.nfo, tvshow.nfo, artist.nfo, album.nfo.
+   - Exports active poster and fanart images as poster.jpg and fanart.jpg.
+
+4. **Sync Across Servers**
+   - Ensures that Plex and Jellyfin display the same library metadata, images, and media names.
+
+5. **Docker Image**
+   - Docker integration with cron jobs is planned but not yet fully implemented.
+
+## Background
+
+- About Me:
+   I'm not a developer by trade, but I manage Plex and Jellyfin to enjoy both convenience and flexibility.
+   My primary library is anime in Plex using the Hama agent with romaji names.
+
+- Why This Script?
+   I needed a tool to sync Plex and Jellyfin libraries, especially for anime with custom posters and art.
+   Existing tools either require a full library refresh (e.g., Lambda) or work in reverse (e.g., XBMC Importer).
+
+- Kometa Integration:
+   I use Kometa to beautify posters, which works perfectly with this script.
+
+## Future Plans
+
+- Add Docker support with cron job automation.
+- Enhance compatibility with more media servers.
+
+## Contributions & Feedback
+
+Feel free to open an issue or submit a pull request for improvements or feature requests.
