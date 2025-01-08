@@ -348,6 +348,13 @@ def write_episode_nfo(episode_nfo_path, episode_root, media_title):
     except Exception as e:
         logger.error(f'[FAILURE] Failed to write episodic NFO for {media_title} due to {e}')
 
+def sanitize_filename(filename):
+    filename = filename.replace(": ", " - ").replace(":", "-").replace("/", "-").replace("\\", "-")
+    filename = filename.replace("*", "-").replace("?", "").replace('"', "")
+    filename = filename.replace("<", "-").replace(">", "-").replace("|", "-")
+    filename = filename.rstrip('.')
+    return filename
+
 def main():
     load_dotenv()
     yaml.SafeLoader.add_constructor('!env_var', env_var_constructor)
@@ -425,16 +432,24 @@ def main():
                             media_path = track0_path[:track0_path.rfind('/')]+'/'
                             for path_list in path_mapping:
                                 media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
-                                
+                        
+                        
                         if library_type == 'artist':
                             nfo_path = os.path.join(media_path, 'artist.nfo')
                         elif library_type == 'albums':
                             nfo_path = os.path.join(media_path, 'album.nfo')
+                        elif config.get('Unified Media Path'):
+                            sanitized_title = sanitize_filename(media_title)
+                            nfo_path = os.path.join(media_path, f'{sanitized_title}.nfo')
                         else:
                             nfo_path = os.path.join(media_path, f'{library_type}.nfo')
 
-                        poster_path = os.path.join(media_path, 'poster.jpg')
-                        fanart_path = os.path.join(media_path, 'fanart.jpg')
+                        if config.get('Unified Media Path'):
+                            poster_path = os.path.join(media_path, f'{sanitized_title}_poster.jpg')
+                            fanart_path = os.path.join(media_path, f'{sanitized_title}_fanart.jpg')
+                        else:
+                            poster_path = os.path.join(media_path, 'poster.jpg')
+                            fanart_path = os.path.join(media_path, 'fanart.jpg')
 
                         if config['Export NFO']:
                             if os.path.exists(nfo_path):

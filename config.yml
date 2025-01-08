@@ -37,6 +37,9 @@ Path mapping: [
     }
 ]
 
+# change this to true only if you put all your media files inside one media folder
+Unified Media Path: false
+
 ################################ NFO options ################################
 
 # important
