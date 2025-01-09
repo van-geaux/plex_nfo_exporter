@@ -561,6 +561,8 @@ def main():
                                         season_title = season_dir.get('title').lower().replace(' ', '')
                                         if season_title == 'Specials':
                                             season_path = os.path.join(media_path, f'season-{season_title}-cover.jpg')
+                                        elif season_title == 'Miniseries':
+                                            season_path = os.path.join(media_path, f"season1-cover.jpg")
                                         else:
                                             season_path = os.path.join(media_path, f"{season_title}-cover.jpg")
                                         
