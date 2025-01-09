@@ -17,9 +17,8 @@ days_difference: 4
 Export NFO: true
 Export poster: false
 Export fanart: false
+Export season poster: false
 Export episode NFO: false
-
-Mode: copy
 
 # change/add path mapping if plex path is different from local (script) path
 Path mapping: [
@@ -38,6 +37,7 @@ Path mapping: [
 ]
 
 # change this to true only if you put all your media files inside one media folder
+# this option will put media title on files, i.e. movietitle.nfo instead of movie.nfo and movietitle_poster.jpg instead of poster.jpg
 Unified Media Path: false
 
 ################################ NFO options ################################

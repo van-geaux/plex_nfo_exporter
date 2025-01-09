@@ -8,6 +8,7 @@
 - Extract media metadata from Plex into `.nfo` files.
 - Export active poster images as `poster.jpg`.
 - Export active background art as `fanart.jpg`.
+- Export active season images as `{seasonname}-poster.jpg`
 - Save files in the media directory for easy use with other media servers.
 - **Does not refresh Plex library metadata** during the export process.
 - Flexible options:
@@ -16,7 +17,8 @@
   - Export all metadata from Plex if needed.
 - Support for path mapping between separate Plex and library servers.
 - Compatible with **movies**, **TV shows**, and **music** libraries.
-- Supports Plex's latest movie and TV agents, as well as [Hama agent](https://github.com/ZeroQI/Hama.bundle).  
+- Supports Plex's latest movie and TV agents, as well as [Hama agent](https://github.com/ZeroQI/Hama.bundle).
+- Supports for multiple movie titles in one directory. 
 
 ---
 

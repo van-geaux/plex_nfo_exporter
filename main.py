@@ -92,9 +92,8 @@ days_difference: 4
 Export NFO: true
 Export poster: false
 Export fanart: false
+Export season poster: false
 Export episode NFO: false
-
-Mode: copy
 
 # change/add path mapping if plex path is different from local (script) path
 Path mapping: [
@@ -111,6 +110,10 @@ Path mapping: [
         'local': '/volume2/debrid'
     }
 ]
+
+# change this to true only if you put all your media files inside one media folder
+# this option will put media title on files, i.e. movietitle.nfo instead of movie.nfo and movietitle_poster.jpg instead of poster.jpg
+Unified Media Path: false
 
 ################################ NFO options ################################
 
@@ -544,6 +547,41 @@ def main():
                                     logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
                             except:
                                 logger.info(f'[FAILURE] Art for {media_title} not found')
+
+                        if config['Export season poster'] and library_type == 'tvshow':
+                            try:
+                                season_url = urljoin(f'{meta_url}/', 'children')
+                                season_response = requests.get(season_url, headers=headers)
+                                if season_response.status_code == 200:
+                                    season_root = ET.fromstring(season_response.content).findall('Directory')
+                                    for season_dir in season_root:
+                                        if not season_dir.get('title') or season_dir.get('title') == 'All episodes':
+                                            continue
+
+                                        season_title = season_dir.get('title').lower().replace(' ', '')
+                                        if season_title == 'Specials':
+                                            season_path = os.path.join(media_path, f'season-{season_title}-cover.jpg')
+                                        else:
+                                            season_path = os.path.join(media_path, f"{season_title}-cover.jpg")
+                                        
+                                        url = urljoin(baseurl, season_dir.get('thumb'))
+                                        if os.path.exists(season_path):
+                                            file_mod_time = datetime.fromtimestamp(os.path.getmtime(season_path))
+                                            time_difference = current_time - file_mod_time
+
+                                            if time_difference.days < days_difference:
+                                                download_image(url, headers, season_path)
+                                                logger.info(f'[SUCCESS] {season_title} poster for {media_title} successfully saved to {season_path}')
+
+                                            else:
+                                                logger.info(f'[SKIPPED] {season_title} poster skipped because there is fanart file older than {days_difference} days')
+
+                                        else:
+                                            download_image(url, headers, season_path)
+                                            logger.info(f'[SUCCESS] {season_title} poster for {media_title} successfully saved to {season_path}')
+
+                            except:
+                                logger.info(f'[FAILURE] Season poster for {media_title} not found')
 
 if __name__ == '__main__':
     ensure_config_file_exists()
