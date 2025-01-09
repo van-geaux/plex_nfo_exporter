@@ -8,7 +8,7 @@
 - Extract media metadata from Plex into `.nfo` files.
 - Export active poster images as `poster.jpg`.
 - Export active background art as `fanart.jpg`.
-- Export active season images as `{seasonname}-poster.jpg`
+- Export active season images as `TV Show/Season XX/seasonXX.jpg`
 - Save files in the media directory for easy use with other media servers.
 - **Does not refresh Plex library metadata** during the export process.
 - Flexible options:

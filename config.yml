@@ -8,6 +8,11 @@ Token: ${PLEX_TOKEN} # how to get token https://support.plex.tv/articles/2040594
 # if the library type is music, input it TWICE. This is due to plex have 2 different roots for music library, each for artist and albums
 Libraries: ['Movies', 'TV Shows', 'Anime', 'Music', 'Music']
 
+# Input the folder prefix name for season.
+# Example: If 'Season', the path will look like '/path/to/media/Season 01/'.
+# Defaults to 'Season' if not defined.
+Season folder name: 'Season'
+
 # minimum age (days) for NFO/poster/art not to be replaced
 # i.e setting 15 means any NFO/poster/art file older than 15 days will not be replaced
 # !!!!!!! set lower than how often you plan to run the script !!!!!!!

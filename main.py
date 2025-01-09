@@ -83,6 +83,11 @@ Token: ${PLEX_TOKEN} # how to get token https://support.plex.tv/articles/2040594
 # if the library type is music, input it TWICE. This is due to plex have 2 different roots for music library, each for artist and albums
 Libraries: ['Movies', 'TV Shows', 'Anime', 'Music', 'Music']
 
+# Input the folder prefix name for season.
+# Example: If 'Season', the path will look like '/path/to/media/Season 01/'.
+# Defaults to 'Season' if not defined.
+Season folder name: 'Season'
+
 # minimum age (days) for NFO/poster/art not to be replaced
 # i.e setting 15 means any NFO/poster/art file older than 15 days will not be replaced
 # !!!!!!! set lower than how often you plan to run the script !!!!!!!
@@ -142,7 +147,7 @@ roles: false
 # producers: false # there's no equivalent in jellyfin metadata
 
 # log level defaults to info for console and warning for file
-log_level: 
+log_level:
 """
     file_path = 'config.yml'
     if not os.path.exists(file_path):
@@ -211,7 +216,7 @@ def write_nfo(config:dict, nfo_path:str, library_type:str, meta_root:str, media_
         with open(nfo_path, 'w', encoding='utf-8') as nfo:
             nfo.write('<?xml version="1.0" encoding="UTF-8"?>\n')
             nfo.write(f'<{library_type} xsi="http://www.w3.org/2001/XMLSchema-instance" xsd="http://www.w3.org/2001/XMLSchema">\n')
-                
+
             if config['agent_id'] and meta_root.get('guid'):
                 guid = meta_root.get('guid')
                 if 'themoviedb' in guid:
@@ -224,34 +229,34 @@ def write_nfo(config:dict, nfo_path:str, library_type:str, meta_root:str, media_
                     agent_name = agent.get('id')[:agent.get('id').rfind(':')]+'id'
                     agent_id = agent.get('id')[agent.get('id').find('//')+2:]
                     nfo.write(f'  <{agent_name}>{agent_id}</{agent_name}>\n')
-                                                    
+
             if config['studio'] and meta_root.get('studio'):
                 nfo.write(f'  <studio>{meta_root.get("studio")}</studio>\n')
 
             if config['title'] and meta_root.get('title'):
                 nfo.write(f'  <title>{meta_root.get("title")}</title>\n')
-                                                    
+
             if config['mpaa'] and meta_root.get('contentRating'):
                 nfo.write(f'  <mpaa>{meta_root.get("contentRating")}</mpaa>\n')
-                                                    
+
             if config['plot'] and meta_root.get('summary'):
                 nfo.write(f'  <plot>{meta_root.get("summary")}</plot>\n')
-                                                    
+
             if config['criticrating'] and meta_root.get('rating'):
                 nfo.write(f'  <criticrating>{meta_root.get("rating")}</criticrating>\n')
-                                                    
+
             if config['customrating'] and meta_root.get('userRating'):
                 nfo.write(f'  <customrating>{meta_root.get("userRating")}</customrating>\n')
-                                                    
+
             if config['year'] and meta_root.get('year'):
                 nfo.write(f'  <year>{meta_root.get("year")}</year>\n')
-                                                    
+
             if config['tagline'] and meta_root.get('tagline'):
                 nfo.write(f'  <tagline>{meta_root.get("tagline")}</tagline>\n')
-                                                
+
             if config['runtime'] and meta_root.get('duration'):
                 nfo.write(f'  <runtime>{meta_root.get("duration")}</runtime>\n')
-                                                
+
             if config['releasedate'] and meta_root.get('originallyAvailableAt'):
                 nfo.write(f'  <releasedate>{meta_root.get("originallyAvailableAt")}</releasedate>\n')
 
@@ -320,7 +325,7 @@ def write_episode_nfo(episode_nfo_path, episode_root, media_title):
                         utype = 'tmdb'
                     elif 'tvdb' in guid.get('id'):
                         utype = 'tvdb'
-                                            
+
                     nfo.write(f'  <uniqueid type="{utype}">{guid.get("id")[guid.get("id").rfind("/")+1:]}</uniqueid>\n')
 
             if episode_root.get('parentIndex'):
@@ -388,7 +393,7 @@ def main():
                 url = urljoin(baseurl, f'/library/sections/{library.get("key")}/albums')
 
             response = requests.get(url, headers=headers)
-            
+
             if response.status_code == 200:
                 root = ET.fromstring(response.content)
                 if library.get('type') == 'movie':
@@ -405,11 +410,11 @@ def main():
                     library_type = 'albums'
                     library_root = 'Directory'
                     check_music -= 1
-                    
+
                 library_contents = root.findall(library_root)
                 for content in library_contents:
-                    ratingkey = content.get('ratingKey')  
-                    meta_url = urljoin(baseurl, f'/library/metadata/{ratingkey}')  
+                    ratingkey = content.get('ratingKey')
+                    meta_url = urljoin(baseurl, f'/library/metadata/{ratingkey}')
                     meta_response = requests.get(meta_url, headers=headers)
                     if meta_response.status_code == 200:
                         meta_root = ET.fromstring(meta_response.content).find(library_root)
@@ -435,8 +440,8 @@ def main():
                             media_path = track0_path[:track0_path.rfind('/')]+'/'
                             for path_list in path_mapping:
                                 media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
-                        
-                        
+
+
                         if library_type == 'artist':
                             nfo_path = os.path.join(media_path, 'artist.nfo')
                         elif library_type == 'albums':
@@ -516,7 +521,7 @@ def main():
                                 if os.path.exists(poster_path):
                                     file_mod_time = datetime.fromtimestamp(os.path.getmtime(poster_path))
                                     time_difference = current_time - file_mod_time
-                                                        
+
                                     if time_difference.days < days_difference:
                                         download_image(url, headers, poster_path)
                                         logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
@@ -535,7 +540,7 @@ def main():
                                 if os.path.exists(fanart_path):
                                     file_mod_time = datetime.fromtimestamp(os.path.getmtime(fanart_path))
                                     time_difference = current_time - file_mod_time
-                                                        
+
                                     if time_difference.days < days_difference:
                                         download_image(url, headers, fanart_path)
                                         logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
@@ -558,14 +563,23 @@ def main():
                                         if not season_dir.get('title') or season_dir.get('title') == 'All episodes':
                                             continue
 
+                                        season_folder_prefix = config.get('Season folder name', 'Season')
+
                                         season_title = season_dir.get('title').lower().replace(' ', '')
-                                        if season_title == 'Specials':
-                                            season_path = os.path.join(media_path, f'season-{season_title}-cover.jpg')
-                                        elif season_title == 'Miniseries':
-                                            season_path = os.path.join(media_path, f"season1-cover.jpg")
+                                        if season_title.startswith('season'):
+                                            number_part = season_title[6:]
+                                            formatted_number = f"{int(number_part):02}"
+                                            season_title = f"{season_folder_prefix} {formatted_number}"
+
+                                        if season_title == 'specials':
+                                            season_folder = os.path.join(media_path, 'Specials')
                                         else:
-                                            season_path = os.path.join(media_path, f"{season_title}-cover.jpg")
-                                        
+                                            season_folder = os.path.join(media_path, f"{season_folder_prefix} {formatted_number}")
+
+                                        os.makedirs(season_folder, exist_ok=True)
+
+                                        season_path = os.path.join(season_folder, f'season{formatted_number}.jpg')
+
                                         url = urljoin(baseurl, season_dir.get('thumb'))
                                         if os.path.exists(season_path):
                                             file_mod_time = datetime.fromtimestamp(os.path.getmtime(season_path))
@@ -582,11 +596,12 @@ def main():
                                             download_image(url, headers, season_path)
                                             logger.info(f'[SUCCESS] {season_title} poster for {media_title} successfully saved to {season_path}')
 
-                            except:
-                                logger.info(f'[FAILURE] Season poster for {media_title} not found')
+                            except Exception as e:
+                                logger.error(f'[FAILURE] Season poster for {media_title} not found due to {e}')
+
 
 if __name__ == '__main__':
     ensure_config_file_exists()
-    ensure_env_file_exists()  
+    ensure_env_file_exists()
     logger = set_logger()
     main()
