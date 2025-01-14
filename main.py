@@ -469,15 +469,15 @@ def main():
 
                         if config['Export episode NFO'] and (library_type == 'tvshow'):
                             try:
-                                meta_season = urljoin(meta_url, '/children')
+                                meta_season = urljoin(meta_url + '/', 'children')
                                 meta_season_response = requests.get(meta_season, headers=headers)
                                 if meta_season_response.status_code == 200:
                                     meta_season_root = ET.fromstring(meta_season_response.content).findall('Directory')
 
-                                    for season in meta_season_root[1:]:
+                                    for season in meta_season_root:
                                         season_key = season.get('ratingKey')
 
-                                        season_url = urljoin(meta_url[:meta_url.rfind('/')], f'{season_key}/children')
+                                        season_url = urljoin(meta_url[:meta_url.rfind('/')] + '/', f'{season_key}/children')
                                         season_url_response = requests.get(season_url, headers=headers)
                                         if season_url_response.status_code == 200:
                                             season_root = ET.fromstring(season_url_response.content).findall('Video')
@@ -485,7 +485,7 @@ def main():
                                             for episode in season_root:
                                                 episode_key = episode.get('ratingKey')
 
-                                                episode_url = urljoin(meta_url[:meta_url.rfind('/')], episode_key)
+                                                episode_url = urljoin(meta_url[:meta_url.rfind('/')] + '/', episode_key)
                                                 episode_url_response = requests.get(episode_url, headers=headers)
                                                 episode_root = ET.fromstring(episode_url_response.content).find('Video')
 
