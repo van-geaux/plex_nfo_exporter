@@ -29,7 +29,7 @@ def set_logger():
     else:
         pass
 
-    with open('config.yml', 'r') as file:
+    with open('config.yml', 'r', encoding='utf-8') as file:
         config_content = file.read()
         config = yaml.safe_load(config_content)
     try:
@@ -65,7 +65,7 @@ def ensure_env_file_exists() -> None:
     default_content = "PLEX_URL='http://192.168.1.2:32400'\nPLEX_TOKEN='very-long-token'"
     file_path = '.env'
     if not os.path.exists(file_path):
-        with open(file_path, 'w') as env_file:
+        with open(file_path, 'w', encoding='utf-8') as env_file:
             env_file.write(default_content)
         print(f"{file_path} created, if you haven't put your Plex's url and token in the config then please put them in the .env")
         sys.exit()
@@ -146,7 +146,7 @@ log_level:
 """
     file_path = 'config.yml'
     if not os.path.exists(file_path):
-        with open(file_path, 'w') as env_file:
+        with open(file_path, 'w', encoding='utf-8') as env_file:
             env_file.write(default_content)
         print(f"{file_path} created, if you haven't set your config then please put them in the config.yml")
         sys.exit()
@@ -362,7 +362,7 @@ def main():
     load_dotenv()
     yaml.SafeLoader.add_constructor('!env_var', env_var_constructor)
 
-    with open('config.yml', 'r') as file:
+    with open('config.yml', 'r', encoding='utf-8') as file:
         config_content = file.read()
         config_content = re.sub(r'\$\{(\w+)\}', lambda match: os.getenv(match.group(1), ''), config_content)
         config = yaml.safe_load(config_content)
@@ -441,15 +441,21 @@ def main():
                             nfo_path = os.path.join(media_path, 'artist.nfo')
                         elif library_type == 'albums':
                             nfo_path = os.path.join(media_path, 'album.nfo')
-                        elif config.get('Unified Media Path'):
+                        elif library_type == 'Movie' and config.get('Movie NFO name type').lower() == 'title':
                             sanitized_title = sanitize_filename(media_title)
                             nfo_path = os.path.join(media_path, f'{sanitized_title}.nfo')
+                        elif library_type == 'Movie' and config.get('Movie NFO name type').lower() == 'filename':
+                            file_name = media_path[media_path.rfind('/')+1:media_path.rfind('.')]
+                            nfo_path = os.path.join(media_path, f'{file_name}.nfo')
                         else:
                             nfo_path = os.path.join(media_path, f'{library_type}.nfo')
 
-                        if config.get('Unified Media Path'):
+                        if library_type == 'Movie' and config.get('Movie NFO name type').lower() == 'title':
                             poster_path = os.path.join(media_path, f'{sanitized_title}_poster.jpg')
                             fanart_path = os.path.join(media_path, f'{sanitized_title}_fanart.jpg')
+                        elif library_type == 'Movie' and config.get('Movie NFO name type').lower() == 'filename':
+                            poster_path = os.path.join(media_path, f'{file_name}_poster.jpg')
+                            fanart_path = os.path.join(media_path, f'{file_name}_fanart.jpg')
                         else:
                             poster_path = os.path.join(media_path, 'poster.jpg')
                             fanart_path = os.path.join(media_path, 'fanart.jpg')
