@@ -450,10 +450,10 @@ def main():
                         else:
                             nfo_path = os.path.join(media_path, f'{library_type}.nfo')
 
-                        if library_type == 'Movie' and config.get('Movie NFO name type').lower() == 'title':
+                        if library_type == 'Movie' and config.get('Movie Poster/art name type').lower() == 'title':
                             poster_path = os.path.join(media_path, f'{sanitized_title}_poster.jpg')
                             fanart_path = os.path.join(media_path, f'{sanitized_title}_fanart.jpg')
-                        elif library_type == 'Movie' and config.get('Movie NFO name type').lower() == 'filename':
+                        elif library_type == 'Movie' and config.get('Movie Poster/art name type').lower() == 'filename':
                             poster_path = os.path.join(media_path, f'{file_name}_poster.jpg')
                             fanart_path = os.path.join(media_path, f'{file_name}_fanart.jpg')
                         else:
