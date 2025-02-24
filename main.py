@@ -195,6 +195,14 @@ def download_image(url:str, headers:dict, save_path:str) -> None:
     try:
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
+            content_type = response.headers.get("Content-Type", "")
+            if not content_type.startswith("image/"):
+                with open("debug_response.bin", "wb") as f:
+                    f.write(response.content)
+                logger.error(f"Invalid content type: {content_type}")
+                logger.error(f"The image url is: {url}")
+                return
+        
             image = Image.open(BytesIO(response.content))
 
             if image.mode == "RGBA":
@@ -415,6 +423,7 @@ def main():
                         meta_root = ET.fromstring(meta_response.content).find(library_root)
 
                         media_title = meta_root.get('title')
+                        file_title = meta_root.find('Media').find('Part').get('file')
                         if library_type == 'movie':
                             media_path = meta_root.find('Media').find('Part').get('file')
                             media_path = media_path[:media_path.rfind("/")]+"/"
@@ -441,19 +450,19 @@ def main():
                             nfo_path = os.path.join(media_path, 'artist.nfo')
                         elif library_type == 'albums':
                             nfo_path = os.path.join(media_path, 'album.nfo')
-                        elif library_type == 'Movie' and config.get('Movie NFO name type').lower() == 'title':
+                        elif library_type == 'movie' and config.get('Movie NFO name type').lower() == 'title':
                             sanitized_title = sanitize_filename(media_title)
                             nfo_path = os.path.join(media_path, f'{sanitized_title}.nfo')
-                        elif library_type == 'Movie' and config.get('Movie NFO name type').lower() == 'filename':
-                            file_name = media_path[media_path.rfind('/')+1:media_path.rfind('.')]
+                        elif library_type == 'movie' and config.get('Movie NFO name type').lower() == 'filename':
+                            file_name = file_title[file_title.rfind('/')+1:file_title.rfind('.')]
                             nfo_path = os.path.join(media_path, f'{file_name}.nfo')
                         else:
                             nfo_path = os.path.join(media_path, f'{library_type}.nfo')
 
-                        if library_type == 'Movie' and config.get('Movie Poster/art name type').lower() == 'title':
+                        if library_type == 'movie' and config.get('Movie Poster/art name type').lower() == 'title':
                             poster_path = os.path.join(media_path, f'{sanitized_title}_poster.jpg')
                             fanart_path = os.path.join(media_path, f'{sanitized_title}_fanart.jpg')
-                        elif library_type == 'Movie' and config.get('Movie Poster/art name type').lower() == 'filename':
+                        elif library_type == 'movie' and config.get('Movie Poster/art name type').lower() == 'filename':
                             poster_path = os.path.join(media_path, f'{file_name}_poster.jpg')
                             fanart_path = os.path.join(media_path, f'{file_name}_fanart.jpg')
                         else:
