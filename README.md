@@ -39,6 +39,7 @@ docker run --rm \
   -v /path/to/config/.env:/app/.env \
   -v /path/to/config/logs:/app/logs \
   -v /path/to/media:/media \
+  -e TZ=Asia/Jakarta \
   -e CRON_SCHEDULE=0 4 * * * \
   -e RUN_IMMEDIATELY=false \
   ghcr.io/van-geaux/plex_nfo_exporter:latest
@@ -59,6 +60,7 @@ services:
   plex-nfo-exporter:
     image: ghcr.io/van-geaux/plex_nfo_exporter:latest
     environment:
+      - TZ=Asia/Jakarta
       - CRON_SCHEDULE=0 4 * * * # if not set will default to 4AM everyday
       - RUN_IMMEDIATELY=false  # if true will run immediately the first time regardless of cron
     volumes:
@@ -94,6 +96,7 @@ To build and run the image from the source code, follow these steps:
       -v /path/to/config/.env:/app/.env \
       -v /path/to/config/logs:/app/logs \
       -v /path/to/media:/media \
+      -e TZ=Asia/Jakarta \
       -e CRON_SCHEDULE=0 4 * * * \
       -e RUN_IMMEDIATELY=false \
       ghcr.io/van-geaux/plex_nfo_exporter:latest
