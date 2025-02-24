@@ -83,10 +83,11 @@ Token: ${PLEX_TOKEN} # how to get token https://support.plex.tv/articles/2040594
 # if the library type is music, input it TWICE. This is due to plex have 2 different roots for music library, each for artist and albums
 Libraries: ['Movies', 'TV Shows', 'Anime', 'Music', 'Music']
 
+# NOT USED ANYMORE, now using file time minus server time, if there is metadata update on the server then everything will be replaced
 # minimum age (days) for NFO/poster/art not to be replaced
 # i.e setting 15 means any NFO/poster/art file older than 15 days will not be replaced
 # !!!!!!! set lower than how often you plan to run the script !!!!!!!
-days_difference: 4
+# days_difference: 4
 
 # true/false choose what to export
 Export NFO: true
@@ -95,6 +96,7 @@ Export fanart: false
 Export season poster: false
 Export episode NFO: false
 
+# Delete this if you use docker volume mapping
 # change/add path mapping if plex path is different from local (script) path
 Path mapping: [
     {
@@ -209,6 +211,8 @@ def download_image(url:str, headers:dict, save_path:str) -> None:
                 image = image.convert("RGB")
 
             image.save(save_path)
+        elif response.status_code == 404:
+            logger.error('Image does not exist')
         else:
             logger.error(f"Failed to retrieve image. HTTP Status Code: {response.status_code}")
     except Exception as e:
@@ -375,12 +379,15 @@ def main():
         config_content = re.sub(r'\$\{(\w+)\}', lambda match: os.getenv(match.group(1), ''), config_content)
         config = yaml.safe_load(config_content)
 
-    baseurl = config['Base URL']
-    token = config['Token']
+    baseurl = os.getenv("PLEX_URL", config.get('Base URL'))
+    token = os.getenv("PLEX_TOKEN", config.get('Token'))
 
-    library_names = config['Libraries']
-    days_difference = config['days_difference']
-    path_mapping = config['Path mapping']
+    library_names = os.getenv("LIBRARIES", config.get('Base URL'))
+    # days_difference = config['days_difference']
+    try:
+        path_mapping = config['Path mapping']
+    except Exception:
+        pass
 
     headers = {'X-Plex-Token': token}
     library_details = get_library_details(baseurl, headers, library_names)
@@ -427,24 +434,35 @@ def main():
                         if library_type == 'movie':
                             media_path = meta_root.find('Media').find('Part').get('file')
                             media_path = media_path[:media_path.rfind("/")]+"/"
-                            for path_list in path_mapping:
-                                media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
+                            try:
+                                for path_list in path_mapping:
+                                    media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
+                            except Exception:
+                                pass
                         elif library_type == 'tvshow':
                             media_path = meta_root.find('Location').get('path')+'/'
-                            for path_list in path_mapping:
-                                media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
+                            try:
+                                for path_list in path_mapping:
+                                    media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
+                            except Exception:
+                                pass
                         elif library_type == 'artist':
                             media_path = meta_root.find('Location').get('path')+'/'
-                            for path_list in path_mapping:
-                                media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
+                            try:
+                                for path_list in path_mapping:
+                                    media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
+                            except Exception:
+                                pass
                         elif library_type == 'albums':
                             track_url = urljoin(meta_url, '/children')
                             track_response = requests.get(track_url, headers=headers)
                             track0_path = ET.fromstring(track_response.content).findall('Track')[0].find('Media').find('Part').get('file')
                             media_path = track0_path[:track0_path.rfind('/')]+'/'
-                            for path_list in path_mapping:
-                                media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
-                        
+                            try:
+                                for path_list in path_mapping:
+                                    media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
+                            except Exception:
+                                pass
                         
                         if library_type == 'artist':
                             nfo_path = os.path.join(media_path, 'artist.nfo')
@@ -471,13 +489,14 @@ def main():
 
                         if config['Export NFO']:
                             if os.path.exists(nfo_path):
-                                file_mod_time = datetime.fromtimestamp(os.path.getmtime(nfo_path))
-                                time_difference = current_time - file_mod_time
+                                file_mod_time = int(os.path.getmtime(nfo_path))
+                                server_mod_time = int(meta_root.get('updatedAt'))
+                                time_difference = file_mod_time - server_mod_time
 
-                                if time_difference.days < days_difference:
+                                if time_difference < 0:
                                     write_nfo(config, nfo_path, library_type, meta_root, media_title)
                                 else:
-                                    logger.info(f'[SKIPPED] NFO for {media_title} skipped because there is NFO file older than {days_difference} days')
+                                    logger.info(f'[SKIPPED] NFO for {media_title} skipped because NFO file is older than last updated metadata')
 
                             else:
                                 write_nfo(config, nfo_path, library_type, meta_root, media_title)
@@ -507,17 +526,21 @@ def main():
                                                 episode_path = episode_root.find('Media').find('Part').get('file')
                                                 episode_nfo_path = episode_path[:episode_path.rfind('.')] + '.nfo'
 
-                                                for path_list in path_mapping:
-                                                    episode_nfo_path = episode_nfo_path.replace(path_list.get('plex'), path_list.get('local'))
+                                                try:
+                                                    for path_list in path_mapping:
+                                                        episode_nfo_path = episode_nfo_path.replace(path_list.get('plex'), path_list.get('local'))
+                                                except Exception:
+                                                    pass
 
                                                 if os.path.exists(episode_nfo_path):
-                                                    file_mod_time = datetime.fromtimestamp(os.path.getmtime(episode_nfo_path))
-                                                    time_difference = current_time - file_mod_time
+                                                    file_mod_time = int(os.path.getmtime(episode_nfo_path))
+                                                    server_mod_time = int(meta_root.get('updatedAt'))
+                                                    time_difference = file_mod_time - server_mod_time
 
-                                                    if time_difference.days < days_difference:
+                                                    if time_difference < 0:
                                                         write_episode_nfo(episode_nfo_path, episode_root, media_title)
                                                     else:
-                                                        logger.info(f'[SKIPPED] Episodic NFO for {media_title} skipped because there is NFO file older than {days_difference} days')
+                                                        logger.info(f'[SKIPPED] Episodic NFO for {media_title} skipped because NFO file is older than last updated metadat')
 
                                                 else:
                                                     write_episode_nfo(episode_nfo_path, episode_root, media_title)
@@ -529,15 +552,16 @@ def main():
                             try:
                                 url = urljoin(baseurl, meta_root.get('thumb'))
                                 if os.path.exists(poster_path):
-                                    file_mod_time = datetime.fromtimestamp(os.path.getmtime(poster_path))
-                                    time_difference = current_time - file_mod_time
+                                    file_mod_time = int(os.path.getmtime(poster_path))
+                                    server_mod_time = int(meta_root.get('updatedAt'))
+                                    time_difference = file_mod_time - server_mod_time
                                                         
-                                    if time_difference.days < days_difference:
+                                    if time_difference < 0:
                                         download_image(url, headers, poster_path)
                                         logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
 
                                     else:
-                                        logger.info(f'[SKIPPED] Poster for {media_title} skipped because there is poster file older than {days_difference} days')
+                                        logger.info(f'[SKIPPED] Poster for {media_title} skipped because poster file is older than last updated metadata')
                                 else:
                                     download_image(url, headers, poster_path)
                                     logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
@@ -548,15 +572,16 @@ def main():
                             try:
                                 url = urljoin(baseurl, meta_root.get('art'))
                                 if os.path.exists(fanart_path):
-                                    file_mod_time = datetime.fromtimestamp(os.path.getmtime(fanart_path))
-                                    time_difference = current_time - file_mod_time
+                                    file_mod_time = int(os.path.getmtime(poster_path))
+                                    server_mod_time = int(meta_root.get('updatedAt'))
+                                    time_difference = file_mod_time - server_mod_time
                                                         
-                                    if time_difference.days < days_difference:
+                                    if time_difference < 0:
                                         download_image(url, headers, fanart_path)
                                         logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
 
                                     else:
-                                        logger.info(f'[SKIPPED] Art for {media_title} skipped because there is fanart file older than {days_difference} days')
+                                        logger.info(f'[SKIPPED] Art for {media_title} skipped because fanart file is older last updated metadata')
                                 else:
                                     download_image(url, headers, fanart_path)
                                     logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
@@ -583,15 +608,16 @@ def main():
                                         
                                         url = urljoin(baseurl, season_dir.get('thumb'))
                                         if os.path.exists(season_path):
-                                            file_mod_time = datetime.fromtimestamp(os.path.getmtime(season_path))
-                                            time_difference = current_time - file_mod_time
+                                            file_mod_time = int(os.path.getmtime(season_path))
+                                            server_mod_time = int(meta_root.get('updatedAt'))
+                                            time_difference = file_mod_time - server_mod_time
 
-                                            if time_difference.days < days_difference:
+                                            if time_difference < 0:
                                                 download_image(url, headers, season_path)
                                                 logger.info(f'[SUCCESS] {season_title} poster for {media_title} successfully saved to {season_path}')
 
                                             else:
-                                                logger.info(f'[SKIPPED] {season_title} poster skipped because there is fanart file older than {days_difference} days')
+                                                logger.info(f'[SKIPPED] {season_title} poster skipped because fanart file is older last updated metadata')
 
                                         else:
                                             download_image(url, headers, season_path)

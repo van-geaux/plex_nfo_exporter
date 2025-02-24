@@ -5,28 +5,30 @@ Base URL: ${PLEX_URL} # i.e http://192.168.1.1:32400 or if reverse proxied i.e. 
 Token: ${PLEX_TOKEN} # how to get token https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/ or fill them in .env file and let this part be
 
 # input the libraries you want to export NFO/poster/fanart from
-# if the library type is music, input it TWICE. This is due to plex have 2 different roots for music library, each for artist and albums
+# if the library type is music, input it TWICE CONSECUTIVELY. This is due to plex having 2 different roots for music library, each for artist and albums
 Libraries: ['Movies', 'TV Shows', 'Anime', 'Music', 'Music']
 
+# NOT USED ANYMORE, now using file time minus server time, if there is metadata update on the server then everything will be replaced
 # minimum age (days) for NFO/poster/art not to be replaced
 # i.e setting 15 means any NFO/poster/art file older than 15 days will not be replaced
 # !!!!!!! set lower than how often you plan to run the script !!!!!!!
-days_difference: 4
+# days_difference: 4
 
 # true/false choose what to export
 Export NFO: true
-Export poster: false
+Export poster: true
 Export fanart: false
 Export season poster: false
 Export episode NFO: false
 
-# default, title, or filename
-# default will save as {library_type}.ext i.e. "movie.nfo", "poster.jpg", "fanart.jpg"
+# title, or filename
+# if empty will save as {library_type}.ext i.e. "movie.nfo", "poster.jpg", "fanart.jpg"
 # title will save as {media_title}.ext i.e. "The Godfather.nfo", "The Godfather_poster.jpg", "The Godfather_fanart.jpg"
 # filename will save as {media_file}.ext i.e. "The Godfather (1972) [imdb-tt0068646].nfo", "The Godfather (1972) [imdb-tt0068646]_poster.jpg", "The Godfather (1972) [imdb-tt0068646]_fanart.jpg"
-Movie NFO name type: default
-Movie Poster/art name type: default
+Movie NFO name type: 
+Movie Poster/art name type: 
 
+# Delete this if you use docker volume mapping
 # change/add path mapping if plex path is different from local (script) path
 Path mapping: [
     {

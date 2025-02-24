@@ -1,0 +1,9 @@
+services:
+  plex-nfo-exporter:
+    image: ghcr.io/van-geaux/plex_nfo_exporter:latest
+    environment:
+      - CRON_SCHEDULE="0 4 * * *" # if not set will default to 4AM everyday
+      - RUN_IMMEDIATELY=false  # if true will run immediately the first time regardless of cron
+    volumes:
+      - /volume2/scripts/plex_nfo_exporter:/app # the config folder, where you put the config.yml
+      - /volume1/data/media:/data_media # left side local path, right side plex path. YOU NEED TO SET THIS EVEN IF BOTH ARE THE SAME
