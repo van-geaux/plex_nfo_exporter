@@ -16,8 +16,8 @@ import xml.etree.ElementTree as ET
 import yaml
 
 def set_logger():
-    if not os.path.exists('/logs'):
-        os.makedirs('/logs')
+    if not os.path.exists('logs'):
+        os.makedirs('logs')
 
     files = list(Path('logs/').iterdir())
     files = [f for f in files if f.is_file()]
@@ -55,6 +55,8 @@ def set_logger():
 
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)
+
+    print('Logger is ready')
 
     return logger
 
@@ -96,7 +98,7 @@ Export fanart: false
 Export season poster: false
 Export episode NFO: false
 
-# Delete this if you use docker volume mapping
+# Leave this empty if you use docker volume mapping i.e. Path mapping: []
 # change/add path mapping if plex path is different from local (script) path
 Path mapping: [
     {
@@ -430,7 +432,10 @@ def main():
                         meta_root = ET.fromstring(meta_response.content).find(library_root)
 
                         media_title = meta_root.get('title')
-                        file_title = meta_root.find('Media').find('Part').get('file')
+                        
+                        if library_type == 'movie':
+                            file_title = meta_root.find('Media').find('Part').get('file')
+
                         if library_type == 'movie':
                             media_path = meta_root.find('Media').find('Part').get('file')
                             media_path = media_path[:media_path.rfind("/")]+"/"
@@ -496,7 +501,7 @@ def main():
                                 if time_difference < 0:
                                     write_nfo(config, nfo_path, library_type, meta_root, media_title)
                                 else:
-                                    logger.info(f'[SKIPPED] NFO for {media_title} skipped because NFO file is older than last updated metadata')
+                                    logger.info(f'[SKIPPED] NFO for {media_title} skipped because NFO file is not older than last updated metadata')
 
                             else:
                                 write_nfo(config, nfo_path, library_type, meta_root, media_title)
@@ -540,7 +545,7 @@ def main():
                                                     if time_difference < 0:
                                                         write_episode_nfo(episode_nfo_path, episode_root, media_title)
                                                     else:
-                                                        logger.info(f'[SKIPPED] Episodic NFO for {media_title} skipped because NFO file is older than last updated metadat')
+                                                        logger.info(f'[SKIPPED] Episodic NFO for {media_title} skipped because NFO file is not older than last updated metadat')
 
                                                 else:
                                                     write_episode_nfo(episode_nfo_path, episode_root, media_title)
@@ -561,7 +566,7 @@ def main():
                                         logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
 
                                     else:
-                                        logger.info(f'[SKIPPED] Poster for {media_title} skipped because poster file is older than last updated metadata')
+                                        logger.info(f'[SKIPPED] Poster for {media_title} skipped because poster file is not older than last updated metadata')
                                 else:
                                     download_image(url, headers, poster_path)
                                     logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
@@ -581,7 +586,7 @@ def main():
                                         logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
 
                                     else:
-                                        logger.info(f'[SKIPPED] Art for {media_title} skipped because fanart file is older last updated metadata')
+                                        logger.info(f'[SKIPPED] Art for {media_title} skipped because fanart file is not older last updated metadata')
                                 else:
                                     download_image(url, headers, fanart_path)
                                     logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
