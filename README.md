@@ -24,6 +24,14 @@
 
 ### Using Docker (Recommended)
 
+Create `config.yml` and `.env`, fill them according to the example in the repo
+
+For the `.env`, fill it with:
+```yaml
+PLEX_URL='http://plex_ip:plex_port' # i.e. http://192.168.1.2:32400 or https://plex.yourdomain.tld if using proxy
+PLEX_TOKEN='super-scecret-token'
+```
+
 Run the Plex NFO Exporter using the official Docker image:
 ```bash
 docker run --rm \
@@ -36,9 +44,15 @@ docker run --rm \
   ghcr.io/van-geaux/plex_nfo_exporter:latest
 ```
 
-After first deployment, stop the container and fill the generated `config.yml` before running it again.
-
 #### Docker Compose Example
+
+Create `config.yml` and `.env`, fill them according to the example in the repo
+
+For the `.env`, fill it with:
+```yaml
+PLEX_URL='http://plex_ip:plex_port' # i.e. http://192.168.1.2:32400 or https://plex.yourdomain.tld if using proxy
+PLEX_TOKEN='super-scecret-token'
+```
 
 ```yaml
 services:
