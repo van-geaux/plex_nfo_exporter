@@ -28,7 +28,7 @@ Export episode NFO: false
 Movie NFO name type: 
 Movie Poster/art name type: 
 
-# Delete this if you use docker volume mapping
+# Leave this empty if you use docker volume mapping i.e. Path mapping: []
 # change/add path mapping if plex path is different from local (script) path
 Path mapping: [
     {

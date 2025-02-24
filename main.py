@@ -56,8 +56,6 @@ def set_logger():
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)
 
-    print('Logger is ready')
-
     return logger
 
 def ensure_env_file_exists() -> None:
@@ -98,7 +96,6 @@ Export fanart: false
 Export season poster: false
 Export episode NFO: false
 
-# Leave this empty if you use docker volume mapping i.e. Path mapping: []
 # change/add path mapping if plex path is different from local (script) path
 Path mapping: [
     {
@@ -373,30 +370,30 @@ def sanitize_filename(filename):
     return filename
 
 def main():
+    logger.debug('Entering main...')
     load_dotenv()
     yaml.SafeLoader.add_constructor('!env_var', env_var_constructor)
 
+    logger.debug('Opening config...')
     with open('config.yml', 'r', encoding='utf-8') as file:
         config_content = file.read()
         config_content = re.sub(r'\$\{(\w+)\}', lambda match: os.getenv(match.group(1), ''), config_content)
         config = yaml.safe_load(config_content)
 
-    baseurl = os.getenv("PLEX_URL", config.get('Base URL'))
-    token = os.getenv("PLEX_TOKEN", config.get('Token'))
+    baseurl = config['Base URL']
+    token = config['Token']
 
-    library_names = os.getenv("LIBRARIES", config.get('Base URL'))
+    library_names = config['Libraries']
     # days_difference = config['days_difference']
-    try:
-        path_mapping = config['Path mapping']
-    except Exception:
-        pass
+    path_mapping = config['Path mapping']
 
     headers = {'X-Plex-Token': token}
     library_details = get_library_details(baseurl, headers, library_names)
 
-    current_time = datetime.now()
+    # current_time = datetime.now()
     check_music = 0
 
+    logger.debug('Reading library...')
     for library in library_details:
         if baseurl:
             if check_music == 0:
@@ -407,6 +404,7 @@ def main():
             response = requests.get(url, headers=headers)
             
             if response.status_code == 200:
+                logger.debug('Getting root...')
                 root = ET.fromstring(response.content)
                 if library.get('type') == 'movie':
                     library_type = 'movie'
@@ -425,6 +423,7 @@ def main():
                     
                 library_contents = root.findall(library_root)
                 for content in library_contents:
+                    logger.debug('Reading content...')
                     ratingkey = content.get('ratingKey')  
                     meta_url = urljoin(baseurl, f'/library/metadata/{ratingkey}')  
                     meta_response = requests.get(meta_url, headers=headers)
@@ -435,39 +434,28 @@ def main():
                         
                         if library_type == 'movie':
                             file_title = meta_root.find('Media').find('Part').get('file')
-
+                            
                         if library_type == 'movie':
                             media_path = meta_root.find('Media').find('Part').get('file')
                             media_path = media_path[:media_path.rfind("/")]+"/"
-                            try:
-                                for path_list in path_mapping:
-                                    media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
-                            except Exception:
-                                pass
+                            for path_list in path_mapping:
+                                media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
                         elif library_type == 'tvshow':
                             media_path = meta_root.find('Location').get('path')+'/'
-                            try:
-                                for path_list in path_mapping:
-                                    media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
-                            except Exception:
-                                pass
+                            for path_list in path_mapping:
+                                media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
                         elif library_type == 'artist':
                             media_path = meta_root.find('Location').get('path')+'/'
-                            try:
-                                for path_list in path_mapping:
-                                    media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
-                            except Exception:
-                                pass
+                            for path_list in path_mapping:
+                                media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
                         elif library_type == 'albums':
                             track_url = urljoin(meta_url, '/children')
                             track_response = requests.get(track_url, headers=headers)
                             track0_path = ET.fromstring(track_response.content).findall('Track')[0].find('Media').find('Part').get('file')
                             media_path = track0_path[:track0_path.rfind('/')]+'/'
-                            try:
-                                for path_list in path_mapping:
-                                    media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
-                            except Exception:
-                                pass
+                            for path_list in path_mapping:
+                                media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
+                        
                         
                         if library_type == 'artist':
                             nfo_path = os.path.join(media_path, 'artist.nfo')
@@ -501,7 +489,7 @@ def main():
                                 if time_difference < 0:
                                     write_nfo(config, nfo_path, library_type, meta_root, media_title)
                                 else:
-                                    logger.info(f'[SKIPPED] NFO for {media_title} skipped because NFO file is not older than last updated metadata')
+                                    logger.info(f'[SKIPPED] NFO for {media_title} skipped because NFO file is older than last updated metadata')
 
                             else:
                                 write_nfo(config, nfo_path, library_type, meta_root, media_title)
@@ -531,11 +519,8 @@ def main():
                                                 episode_path = episode_root.find('Media').find('Part').get('file')
                                                 episode_nfo_path = episode_path[:episode_path.rfind('.')] + '.nfo'
 
-                                                try:
-                                                    for path_list in path_mapping:
-                                                        episode_nfo_path = episode_nfo_path.replace(path_list.get('plex'), path_list.get('local'))
-                                                except Exception:
-                                                    pass
+                                                for path_list in path_mapping:
+                                                    episode_nfo_path = episode_nfo_path.replace(path_list.get('plex'), path_list.get('local'))
 
                                                 if os.path.exists(episode_nfo_path):
                                                     file_mod_time = int(os.path.getmtime(episode_nfo_path))
@@ -545,7 +530,7 @@ def main():
                                                     if time_difference < 0:
                                                         write_episode_nfo(episode_nfo_path, episode_root, media_title)
                                                     else:
-                                                        logger.info(f'[SKIPPED] Episodic NFO for {media_title} skipped because NFO file is not older than last updated metadat')
+                                                        logger.info(f'[SKIPPED] Episodic NFO for {media_title} skipped because NFO file is older than last updated metadat')
 
                                                 else:
                                                     write_episode_nfo(episode_nfo_path, episode_root, media_title)
@@ -566,7 +551,7 @@ def main():
                                         logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
 
                                     else:
-                                        logger.info(f'[SKIPPED] Poster for {media_title} skipped because poster file is not older than last updated metadata')
+                                        logger.info(f'[SKIPPED] Poster for {media_title} skipped because poster file is older than last updated metadata')
                                 else:
                                     download_image(url, headers, poster_path)
                                     logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
@@ -586,7 +571,7 @@ def main():
                                         logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
 
                                     else:
-                                        logger.info(f'[SKIPPED] Art for {media_title} skipped because fanart file is not older last updated metadata')
+                                        logger.info(f'[SKIPPED] Art for {media_title} skipped because fanart file is older last updated metadata')
                                 else:
                                     download_image(url, headers, fanart_path)
                                     logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')

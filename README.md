@@ -27,9 +27,11 @@
 Run the Plex NFO Exporter using the official Docker image:
 ```bash
 docker run --rm \
-  -v /path/to/config:/app \
+  -v /path/to/config/config.yml:/app/config.yml \
+  -v /path/to/config/.env:/app/.env \
+  -v /path/to/config/logs:/app/logs \
   -v /path/to/media:/media \
-  -e CRON_SCHEDULE="0 4 * * *" \
+  -e CRON_SCHEDULE=0 4 * * * \
   -e RUN_IMMEDIATELY=false \
   ghcr.io/van-geaux/plex_nfo_exporter:latest
 ```
@@ -43,10 +45,12 @@ services:
   plex-nfo-exporter:
     image: ghcr.io/van-geaux/plex_nfo_exporter:latest
     environment:
-      - CRON_SCHEDULE="0 4 * * *" # if not set will default to 4AM everyday
+      - CRON_SCHEDULE=0 4 * * * # if not set will default to 4AM everyday
       - RUN_IMMEDIATELY=false  # if true will run immediately the first time regardless of cron
     volumes:
-      - /volume2/scripts/plex_nfo_exporter:/app # the config folder, where you put the config.yml
+      - /path/to/config/config.yml:/app/config.yml # you need to mount the file
+      - /path/to/config/.env:/app/.env # you need to mount the file
+      - /path/to/config/logs:/app/logs
       - /volume1/data/media:/data_media # left side local path, right side plex path. YOU NEED TO SET THIS EVEN IF BOTH ARE THE SAME
 ```
 
@@ -72,9 +76,11 @@ To build and run the image from the source code, follow these steps:
 3. Run the Custom Image
    ```bash
    docker run --rm \
-      -v /path/to/config:/app \
+      -v /path/to/config/config.yml:/app/config.yml \
+      -v /path/to/config/.env:/app/.env \
+      -v /path/to/config/logs:/app/logs \
       -v /path/to/media:/media \
-      -e CRON_SCHEDULE="0 4 * * *" \
+      -e CRON_SCHEDULE=0 4 * * * \
       -e RUN_IMMEDIATELY=false \
       ghcr.io/van-geaux/plex_nfo_exporter:latest
    ```
