@@ -7,8 +7,12 @@ CRON_SCHEDULE="${CRON_SCHEDULE:-'0 4 * * *'}"
 
 echo "Using CRON_SCHEDULE: $CRON_SCHEDULE"
 
+touch /var/log/cron.log
+chmod 666 /var/log/cron.log
+
 # Set the cron job
-echo "$CRON_SCHEDULE root cd /app && python main.py >> /var/log/cron.log 2>&1" > /etc/cron.d/mycron
+echo "PATH=/usr/local/bin:/usr/bin:/bin" > /etc/cron.d/mycron
+echo "$CRON_SCHEDULE root cd /app && /usr/local/bin/python -u main.py >> /var/log/cron.log 2>&1" > /etc/cron.d/mycron
 
 # Set permissions and apply cron job
 chmod 0644 /etc/cron.d/mycron
@@ -17,8 +21,8 @@ crontab /etc/cron.d/mycron
 # Run the script immediately if required
 if [ "$RUN_IMMEDIATELY" = "true" ]; then
     echo "Running script immediately..."
-    cd /app && python main.py
+    cd /app && /usr/local/bin/python -u main.py >> /var/log/cron.log 2>&1
 fi
 
 # Start cron in the foreground
-cron -f
+cron -L 15 -f
