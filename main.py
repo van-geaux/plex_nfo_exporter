@@ -15,6 +15,12 @@ import sys
 import xml.etree.ElementTree as ET
 import yaml
 
+import os
+import logging
+from pathlib import Path
+from datetime import datetime
+import yaml
+
 def set_logger():
     if not os.path.exists('logs'):
         os.makedirs('logs')
@@ -32,10 +38,11 @@ def set_logger():
     with open('config.yml', 'r', encoding='utf-8') as file:
         config_content = file.read()
         config = yaml.safe_load(config_content)
+
     try:
-        log_level_str = config.get('log_level').upper()
+        log_level_str = config.get('log_level', 'INFO').upper()
     except:
-        log_level_str = 'other'
+        log_level_str = 'INFO'
 
     log_level_console = getattr(logging, log_level_str, logging.INFO)
     log_level_file = getattr(logging, log_level_str, logging.WARNING)
@@ -43,17 +50,18 @@ def set_logger():
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
 
+    # Console handler (stdout)
     console_handler = logging.StreamHandler()
-    file_handler = logging.FileHandler(f"logs/app-{str(datetime.now().date()).replace('-', '')}.log", encoding='utf-8')
-
     console_handler.setLevel(log_level_console)
-    file_handler.setLevel(log_level_file)
-
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    console_handler.setFormatter(formatter)
-    file_handler.setFormatter(formatter)
-
+    console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    console_handler.setFormatter(console_formatter)
     logger.addHandler(console_handler)
+
+    # File handler
+    file_handler = logging.FileHandler(f"logs/app-{datetime.now().date().isoformat().replace('-', '')}.log", encoding='utf-8')
+    file_handler.setLevel(log_level_file)
+    file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
 
     return logger
@@ -64,7 +72,9 @@ def ensure_env_file_exists() -> None:
     """
     default_content = "PLEX_URL='http://192.168.1.2:32400'\nPLEX_TOKEN='very-long-token'"
     file_path = '.env'
-    if not os.path.exists(file_path):
+    if os.getenv("PLEX_URL") and os.getenv("PLEX_TOKEN"):
+        return
+    elif not os.path.exists(file_path):
         with open(file_path, 'w', encoding='utf-8') as env_file:
             env_file.write(default_content)
         print(f"{file_path} created, if you haven't put your Plex's url and token in the config then please put them in the .env")
@@ -146,6 +156,7 @@ roles: false
 log_level: 
 """
     file_path = 'config.yml'
+
     if not os.path.exists(file_path):
         with open(file_path, 'w', encoding='utf-8') as env_file:
             env_file.write(default_content)
@@ -173,7 +184,7 @@ def get_library_details(plex_url:str, headers:dict, library_names:list) -> list:
     Get details about available libraries
     """
     if plex_url:
-        url = urljoin(plex_url, '/library/sections')
+        url = urljoin(plex_url, 'library/sections')
         response = requests.get(url, headers=headers)
 
         if response.status_code == 200:
@@ -380,8 +391,8 @@ def main():
         config_content = re.sub(r'\$\{(\w+)\}', lambda match: os.getenv(match.group(1), ''), config_content)
         config = yaml.safe_load(config_content)
 
-    baseurl = config['Base URL']
-    token = config['Token']
+    baseurl = os.getenv("PLEX_URL", config['Base URL']).strip("'\"")
+    token = os.getenv("PLEX_TOKEN", config['Token']).strip("'\"")
 
     library_names = config['Libraries']
     # days_difference = config['days_difference']

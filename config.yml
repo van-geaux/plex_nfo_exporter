@@ -1,6 +1,7 @@
 # config.yml
 
 # change plex url and token here
+# you can ignore this if you are using docker and have set PLEX_URL and PLEX_TOKEN environment
 Base URL: ${PLEX_URL} # i.e http://192.168.1.1:32400 or if reverse proxied i.e. https://plex.yourdomain.tld or fill them in .env file and let this part be
 Token: ${PLEX_TOKEN} # how to get token https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/ or fill them in .env file and let this part be
 

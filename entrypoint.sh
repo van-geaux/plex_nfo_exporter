@@ -7,12 +7,10 @@ CRON_SCHEDULE="${CRON_SCHEDULE:-'0 4 * * *'}"
 
 echo "Using CRON_SCHEDULE: $CRON_SCHEDULE"
 
-touch /var/log/cron.log
-chmod 666 /var/log/cron.log
-
 # Set the cron job
 echo "PATH=/usr/local/bin:/usr/bin:/bin" > /etc/cron.d/mycron
-echo "$CRON_SCHEDULE root cd /app && /usr/local/bin/python -u main.py >> /var/log/cron.log 2>&1" > /etc/cron.d/mycron
+# Redirect cron job output to stdout/stderr instead of a file
+echo "$CRON_SCHEDULE root cd /app && /usr/local/bin/python -u main.py >> /proc/1/fd/1 2>> /proc/1/fd/2" >> /etc/cron.d/mycron
 
 # Set permissions and apply cron job
 chmod 0644 /etc/cron.d/mycron
@@ -21,8 +19,8 @@ crontab /etc/cron.d/mycron
 # Run the script immediately if required
 if [ "$RUN_IMMEDIATELY" = "true" ]; then
     echo "Running script immediately..."
-    cd /app && /usr/local/bin/python -u main.py >> /var/log/cron.log 2>&1
+    cd /app && /usr/local/bin/python -u main.py >> /proc/1/fd/1 2>> /proc/1/fd/2
 fi
 
-# Start cron in the foreground
+# Start cron and forward its output to stdout/stderr
 cron -L 15 -f

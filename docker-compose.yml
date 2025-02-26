@@ -5,6 +5,8 @@ services:
       - TZ=Asia/Jakarta
       - CRON_SCHEDULE=0 4 * * * # if not set will default to 4AM everyday
       - RUN_IMMEDIATELY=false  # if true will run immediately the first time regardless of cron
+      - PLEX_URL='http://plex_ip:port' # optional, you need to set in config.yml otherwise
+      - PLEX_TOKEN='super-secret-token' # optional, you need to set in config.yml otherwise
     volumes:
       - /path/to/config/config.yml:/app/config.yml # you need to mount the file
       - /path/to/config/.env:/app/.env # you need to mount the file

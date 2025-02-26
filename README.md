@@ -42,6 +42,8 @@ docker run --rm \
   -e TZ=Asia/Jakarta \
   -e CRON_SCHEDULE=0 4 * * * \
   -e RUN_IMMEDIATELY=false \
+  -e PLEX_URL='http://plex_ip:port' \
+  -e PLEX_TOKEN='super-secret-token' \
   ghcr.io/van-geaux/plex_nfo_exporter:latest
 ```
 
@@ -62,10 +64,12 @@ services:
     environment:
       - TZ=Asia/Jakarta
       - CRON_SCHEDULE=0 4 * * * # if not set will default to 4AM everyday
-      - RUN_IMMEDIATELY=false  # if true will run immediately the first time regardless of cron
+      - RUN_IMMEDIATELY=false  # if true will run immediately at start regardless of cron
+      - PLEX_URL='http://plex_ip:port' # optional, you need to set in config.yml otherwise
+      - PLEX_TOKEN='super-secret-token' # optional, you need to set in config.yml otherwise
     volumes:
       - /path/to/config/config.yml:/app/config.yml # you need to mount the file
-      - /path/to/config/.env:/app/.env # you need to mount the file
+      - /path/to/config/.env:/app/.env # you need to mount the file, can ignore/delete if setting PLEX_URL and PLEX_TOKEN environment
       - /path/to/config/logs:/app/logs
       - /volume1/data/media:/data_media # left side local path, right side plex path. YOU NEED TO SET THIS EVEN IF BOTH ARE THE SAME
 ```
@@ -99,6 +103,8 @@ To build and run the image from the source code, follow these steps:
       -e TZ=Asia/Jakarta \
       -e CRON_SCHEDULE=0 4 * * * \
       -e RUN_IMMEDIATELY=false \
+      -e PLEX_URL='http://plex_ip:port' \
+      -e PLEX_TOKEN='super-secret-token' \
       ghcr.io/van-geaux/plex_nfo_exporter:latest
    ```
 
