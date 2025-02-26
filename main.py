@@ -500,7 +500,7 @@ def main():
                                 if time_difference < 0:
                                     write_nfo(config, nfo_path, library_type, meta_root, media_title)
                                 else:
-                                    logger.info(f'[SKIPPED] NFO for {media_title} skipped because NFO file is older than last updated metadata')
+                                    logger.info(f'[SKIPPED] NFO for {media_title} skipped because NFO file is not older than last updated metadata')
 
                             else:
                                 write_nfo(config, nfo_path, library_type, meta_root, media_title)
@@ -541,7 +541,7 @@ def main():
                                                     if time_difference < 0:
                                                         write_episode_nfo(episode_nfo_path, episode_root, media_title)
                                                     else:
-                                                        logger.info(f'[SKIPPED] Episodic NFO for {media_title} skipped because NFO file is older than last updated metadat')
+                                                        logger.info(f'[SKIPPED] Episodic NFO for {media_title} skipped because NFO file is not older than last updated metadata')
 
                                                 else:
                                                     write_episode_nfo(episode_nfo_path, episode_root, media_title)
@@ -562,7 +562,7 @@ def main():
                                         logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
 
                                     else:
-                                        logger.info(f'[SKIPPED] Poster for {media_title} skipped because poster file is older than last updated metadata')
+                                        logger.info(f'[SKIPPED] Poster for {media_title} skipped because poster file is not older than last updated metadata')
                                 else:
                                     download_image(url, headers, poster_path)
                                     logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
@@ -582,7 +582,7 @@ def main():
                                         logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
 
                                     else:
-                                        logger.info(f'[SKIPPED] Art for {media_title} skipped because fanart file is older last updated metadata')
+                                        logger.info(f'[SKIPPED] Art for {media_title} skipped because fanart file is not older last updated metadata')
                                 else:
                                     download_image(url, headers, fanart_path)
                                     logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
@@ -618,7 +618,7 @@ def main():
                                                 logger.info(f'[SUCCESS] {season_title} poster for {media_title} successfully saved to {season_path}')
 
                                             else:
-                                                logger.info(f'[SKIPPED] {season_title} poster skipped because fanart file is older last updated metadata')
+                                                logger.info(f'[SKIPPED] {season_title} poster skipped because fanart file is not older last updated metadata')
 
                                         else:
                                             download_image(url, headers, season_path)
