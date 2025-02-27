@@ -96,14 +96,15 @@ def ensure_config_file_exists() -> None:
     default_content = """# config.yml
 
 # change plex url and token here
+# you can ignore this if you are using PLEX_URL and PLEX_TOKEN environment variables in docker
 Base URL: ${PLEX_URL} # i.e http://192.168.1.1:32400 or if reverse proxied i.e. https://plex.yourdomain.tld or fill them in .env file and let this part be
 Token: ${PLEX_TOKEN} # how to get token https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/ or fill them in .env file and let this part be
 
 # input the libraries you want to export NFO/poster/fanart from
-# if the library type is music, input it TWICE. This is due to plex have 2 different roots for music library, each for artist and albums
+# if the library type is music, input it TWICE CONSECUTIVELY. This is due to plex having 2 different roots for music library, each for artist and albums
 Libraries: ['Movies', 'TV Shows', 'Anime', 'Music', 'Music']
 
-# NOT USED ANYMORE, now using file time minus server time, if there is metadata update on the server then everything will be replaced
+# DEPRECATED, now using file time minus server time, if there is metadata update on the server then everything will be replaced
 # minimum age (days) for NFO/poster/art not to be replaced
 # i.e setting 15 means any NFO/poster/art file older than 15 days will not be replaced
 # !!!!!!! set lower than how often you plan to run the script !!!!!!!
@@ -111,18 +112,19 @@ Libraries: ['Movies', 'TV Shows', 'Anime', 'Music', 'Music']
 
 # true/false choose what to export
 Export NFO: true
-Export poster: false
+Export poster: true
 Export fanart: false
 Export season poster: false
 Export episode NFO: false
 
 # title, or filename
-# if default will save as {library_type}.ext i.e. "movie.nfo", "poster.jpg", "fanart.jpg"
 # title will save as {media_title}.ext i.e. "The Godfather.nfo", "The Godfather_poster.jpg", "The Godfather_fanart.jpg"
 # filename will save as {media_file}.ext i.e. "The Godfather (1972) [imdb-tt0068646].nfo", "The Godfather (1972) [imdb-tt0068646]_poster.jpg", "The Godfather (1972) [imdb-tt0068646]_fanart.jpg"
+# anything other than that will save as {library_type}.ext i.e. "movie.nfo", "poster.jpg", "fanart.jpg"
 Movie NFO name type: default
 Movie Poster/art name type: default
 
+# Leave this empty if you use docker volume mapping i.e. Path mapping: []
 # change/add path mapping if plex path is different from local (script) path
 Path mapping: [
     {
@@ -138,10 +140,6 @@ Path mapping: [
         'local': '/volume2/debrid'
     }
 ]
-
-# change this to true only if you put all your media files inside one media folder
-# this option will put media title on files, i.e. movietitle.nfo instead of movie.nfo and movietitle_poster.jpg instead of poster.jpg
-Unified Media Path: false
 
 ################################ NFO options ################################
 
@@ -482,16 +480,20 @@ def main():
                             media_path = track0_path[:track0_path.rfind('/')]+'/'
                             for path_list in path_mapping:
                                 media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
-                        
+
+                        try:
+                            movie_filename_type = config.get('Movie NFO name type').lower()
+                        except:
+                            movie_filename_type = 'default'
                         
                         if library_type == 'artist':
                             nfo_path = os.path.join(media_path, 'artist.nfo')
                         elif library_type == 'albums':
                             nfo_path = os.path.join(media_path, 'album.nfo')
-                        elif library_type == 'movie' and config.get('Movie NFO name type').lower() == 'title':
+                        elif library_type == 'movie' and movie_filename_type == 'title':
                             sanitized_title = sanitize_filename(media_title)
                             nfo_path = os.path.join(media_path, f'{sanitized_title}.nfo')
-                        elif library_type == 'movie' and config.get('Movie NFO name type').lower() == 'filename':
+                        elif library_type == 'movie' and movie_filename_type == 'filename':
                             file_name = file_title[file_title.rfind('/')+1:file_title.rfind('.')]
                             nfo_path = os.path.join(media_path, f'{file_name}.nfo')
                         else:
