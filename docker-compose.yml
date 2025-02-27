@@ -10,5 +10,5 @@ services:
     volumes:
       - /path/to/config/config.yml:/app/config.yml # you need to mount the file
       - /path/to/config/.env:/app/.env # you need to mount the file
-      - /path/to/config/logs:/app/logs
+      - /path/to/config/logs:/app/logs # optional, you need to create the logs folder manually
       - /volume1/data/media:/data_media # left side local path, right side plex path. YOU NEED TO SET THIS EVEN IF BOTH ARE THE SAME

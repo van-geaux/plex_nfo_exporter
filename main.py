@@ -21,6 +21,11 @@ from pathlib import Path
 from datetime import datetime
 import yaml
 
+if os.path.isdir('/app/config'):
+    config_path = '/app/config/config.yml'
+else:
+    config_path = 'config.yml'
+
 def set_logger():
     if not os.path.exists('logs'):
         os.makedirs('logs')
@@ -35,7 +40,7 @@ def set_logger():
     else:
         pass
 
-    with open('config.yml', 'r', encoding='utf-8') as file:
+    with open(config_path, 'r', encoding='utf-8') as file:
         config_content = file.read()
         config = yaml.safe_load(config_content)
 
@@ -71,13 +76,18 @@ def ensure_env_file_exists() -> None:
     Create .env with placeholder if not exist
     """
     default_content = "PLEX_URL='http://192.168.1.2:32400'\nPLEX_TOKEN='very-long-token'"
-    file_path = '.env'
+
+    if os.path.isdir('/app/config'):
+        file_path = '/app/config/.env'
+    else:
+        file_path = '.env'
+
     if os.getenv("PLEX_URL") and os.getenv("PLEX_TOKEN"):
         return
     elif not os.path.exists(file_path):
         with open(file_path, 'w', encoding='utf-8') as env_file:
             env_file.write(default_content)
-        print(f"{file_path} created, if you haven't put your Plex's url and token in the config then please put them in the .env")
+        print(f"{file_path} created, if you haven't put your Plex's url and token in the config then please put them in the .env then restart the container/rerun the script")
         sys.exit()
     else:
         print(f"{file_path} already exists.")
@@ -155,15 +165,14 @@ roles: false
 # log level defaults to info for console and warning for file
 log_level: 
 """
-    file_path = 'config.yml'
 
-    if not os.path.exists(file_path):
-        with open(file_path, 'w', encoding='utf-8') as env_file:
+    if not os.path.exists(config_path):
+        with open(config_path, 'w', encoding='utf-8') as env_file:
             env_file.write(default_content)
-        print(f"{file_path} created, if you haven't set your config then please put them in the config.yml")
+        print(f"{config_path} created, if you haven't set your config then please put them in the config.yml then restart the container/rerun the script")
         sys.exit()
     else:
-        print(f"{file_path} already exists.")
+        print(f"{config_path} already exists.")
 
 def env_var_constructor(loader, node):
     """
@@ -386,7 +395,7 @@ def main():
     yaml.SafeLoader.add_constructor('!env_var', env_var_constructor)
 
     logger.debug('Opening config...')
-    with open('config.yml', 'r', encoding='utf-8') as file:
+    with open(config_path, 'r', encoding='utf-8') as file:
         config_content = file.read()
         config_content = re.sub(r'\$\{(\w+)\}', lambda match: os.getenv(match.group(1), ''), config_content)
         config = yaml.safe_load(config_content)
