@@ -116,6 +116,13 @@ Export fanart: false
 Export season poster: false
 Export episode NFO: false
 
+# title, or filename
+# if default will save as {library_type}.ext i.e. "movie.nfo", "poster.jpg", "fanart.jpg"
+# title will save as {media_title}.ext i.e. "The Godfather.nfo", "The Godfather_poster.jpg", "The Godfather_fanart.jpg"
+# filename will save as {media_file}.ext i.e. "The Godfather (1972) [imdb-tt0068646].nfo", "The Godfather (1972) [imdb-tt0068646]_poster.jpg", "The Godfather (1972) [imdb-tt0068646]_fanart.jpg"
+Movie NFO name type: default
+Movie Poster/art name type: default
+
 # change/add path mapping if plex path is different from local (script) path
 Path mapping: [
     {
