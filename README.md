@@ -24,19 +24,10 @@
 
 ### Using Docker (Recommended)
 
-Create `config.yml` and `.env`, fill them according to the example in the repo
-
-For the `.env`, fill it with:
-```yaml
-PLEX_URL='http://plex_ip:plex_port' # i.e. http://192.168.1.2:32400 or https://plex.yourdomain.tld if using proxy
-PLEX_TOKEN='super-scecret-token'
-```
-
 Run the Plex NFO Exporter using the official Docker image:
 ```bash
 docker run --rm \
-  -v /path/to/config/config.yml:/app/config.yml \
-  -v /path/to/config/.env:/app/.env \
+  -v /path/to/config:/app/config \
   -v /path/to/config/logs:/app/logs \
   -v /path/to/media:/media \
   -e TZ=Asia/Jakarta \
@@ -47,15 +38,16 @@ docker run --rm \
   ghcr.io/van-geaux/plex_nfo_exporter:latest
 ```
 
-#### Docker Compose Example
-
-Create `config.yml` and `.env`, fill them according to the example in the repo
+After first deployment, fill the generated `config.yml` and `.env` before restarting it again.
+`.env` file will only be generated if you are not using `PLEX_URL` and `PLEX_TOKEN` environment variables
 
 For the `.env`, fill it with:
 ```yaml
 PLEX_URL='http://plex_ip:plex_port' # i.e. http://192.168.1.2:32400 or https://plex.yourdomain.tld if using proxy
 PLEX_TOKEN='super-scecret-token'
 ```
+
+#### Docker Compose Example
 
 ```yaml
 services:
@@ -68,13 +60,19 @@ services:
       - PLEX_URL='http://plex_ip:port' # optional, you need to set in config.yml otherwise
       - PLEX_TOKEN='super-secret-token' # optional, you need to set in config.yml otherwise
     volumes:
-      - /path/to/config/config.yml:/app/config.yml # you need to mount the file
-      - /path/to/config/.env:/app/.env # you need to mount the file, can ignore/delete if setting PLEX_URL and PLEX_TOKEN environment
-      - /path/to/config/logs:/app/logs
+      - /path/to/config:/app/config
+      - /path/to/config/logs:/app/logs # optional, you need to create the logs folder if you want to mount it
       - /volume1/data/media:/data_media # left side local path, right side plex path. YOU NEED TO SET THIS EVEN IF BOTH ARE THE SAME
 ```
 
-After first deployment, stop the container and fill the generated `config.yml` before running it again.
+After first deployment, fill the generated `config.yml` and `.env` before restarting it again.
+`.env` file will only be generated if you are not using `PLEX_URL` and `PLEX_TOKEN` environment variables
+
+For the `.env`, fill it with:
+```yaml
+PLEX_URL='http://plex_ip:plex_port' # i.e. http://192.168.1.2:32400 or https://plex.yourdomain.tld if using proxy
+PLEX_TOKEN='super-scecret-token'
+```
 
 #### Building the Image Yourself
 
@@ -96,8 +94,7 @@ To build and run the image from the source code, follow these steps:
 3. Run the Custom Image
    ```bash
    docker run --rm \
-      -v /path/to/config/config.yml:/app/config.yml \
-      -v /path/to/config/.env:/app/.env \
+      -v /path/to/config:/app/config \
       -v /path/to/config/logs:/app/logs \
       -v /path/to/media:/media \
       -e TZ=Asia/Jakarta \
@@ -107,6 +104,15 @@ To build and run the image from the source code, follow these steps:
       -e PLEX_TOKEN='super-secret-token' \
       ghcr.io/van-geaux/plex_nfo_exporter:latest
    ```
+
+After first deployment, fill the generated `config.yml` and `.env` before restarting it again.
+`.env` file will only be generated if you are not using `PLEX_URL` and `PLEX_TOKEN` environment variables
+
+For the `.env`, fill it with:
+```yaml
+PLEX_URL='http://plex_ip:plex_port' # i.e. http://192.168.1.2:32400 or https://plex.yourdomain.tld if using proxy
+PLEX_TOKEN='super-scecret-token'
+```
 
 ### Running Manually
 
