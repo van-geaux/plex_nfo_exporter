@@ -396,7 +396,12 @@ def sanitize_filename(filename):
 
 def main():
     logger.debug('Entering main...')
-    load_dotenv()
+
+    if os.path.exists('/app/config/.env'):
+        load_dotenv('/app/config/.env')
+    else:
+        load_dotenv()
+
     yaml.SafeLoader.add_constructor('!env_var', env_var_constructor)
 
     logger.debug('Opening config...')
@@ -407,6 +412,8 @@ def main():
 
     baseurl = os.getenv("PLEX_URL", config['Base URL']).strip("'\"")
     token = os.getenv("PLEX_TOKEN", config['Token']).strip("'\"")
+
+    print(config['Token'])
 
     library_names = config['Libraries']
     # days_difference = config['days_difference']
@@ -482,8 +489,8 @@ def main():
                                 media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
 
                         try:
-                            movie_filename_type = config.get('Movie NFO name type').lower()
-                        except:
+                            movie_filename_type = config.get('Movie NFO name type', 'default').lower()
+                        except Exception:
                             movie_filename_type = 'default'
                         
                         if library_type == 'artist':
@@ -576,14 +583,20 @@ def main():
                                     time_difference = file_mod_time - server_mod_time
                                                         
                                     if time_difference < 0:
-                                        download_image(url, headers, poster_path)
-                                        logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
+                                        try:
+                                            download_image(url, headers, poster_path)
+                                            logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
+                                        except Exception as e:
+                                            logger.info(f'[FAILURE] Failed to save poster for {media_title} due to: {e}')
 
                                     else:
                                         logger.info(f'[SKIPPED] Poster for {media_title} skipped because poster file is not older than last updated metadata')
                                 else:
-                                    download_image(url, headers, poster_path)
-                                    logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
+                                    try:
+                                        download_image(url, headers, poster_path)
+                                        logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
+                                    except Exception as e:
+                                        logger.info(f'[FAILURE] Failed to save poster for {media_title} due to: {e}')
                             except:
                                 logger.info(f'[FAILURE] Poster for {media_title} not found')
 
@@ -596,14 +609,20 @@ def main():
                                     time_difference = file_mod_time - server_mod_time
                                                         
                                     if time_difference < 0:
-                                        download_image(url, headers, fanart_path)
-                                        logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
+                                        try:
+                                            download_image(url, headers, fanart_path)
+                                            logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
+                                        except Exception as e:
+                                            logger.info(f'[FAILURE] Failed to save art for {media_title} due to: {e}')
 
                                     else:
                                         logger.info(f'[SKIPPED] Art for {media_title} skipped because fanart file is not older last updated metadata')
                                 else:
-                                    download_image(url, headers, fanart_path)
-                                    logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
+                                    try:
+                                        download_image(url, headers, fanart_path)
+                                        logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
+                                    except Exception as e:
+                                        logger.info(f'[FAILURE] Failed to save art for {media_title} due to: {e}')
                             except:
                                 logger.info(f'[FAILURE] Art for {media_title} not found')
 
@@ -632,15 +651,21 @@ def main():
                                             time_difference = file_mod_time - server_mod_time
 
                                             if time_difference < 0:
-                                                download_image(url, headers, season_path)
-                                                logger.info(f'[SUCCESS] {season_title} poster for {media_title} successfully saved to {season_path}')
+                                                try:
+                                                    download_image(url, headers, season_path)
+                                                    logger.info(f'[SUCCESS] {season_title} poster for {media_title} successfully saved to {season_path}')
+                                                except Exception as e:
+                                                    logger.info(f'[FAILURE] Failed to save {season_title} poster for {media_title} due to: {e}')
 
                                             else:
                                                 logger.info(f'[SKIPPED] {season_title} poster skipped because fanart file is not older last updated metadata')
 
                                         else:
-                                            download_image(url, headers, season_path)
-                                            logger.info(f'[SUCCESS] {season_title} poster for {media_title} successfully saved to {season_path}')
+                                            try:
+                                                download_image(url, headers, season_path)
+                                                logger.info(f'[SUCCESS] {season_title} poster for {media_title} successfully saved to {season_path}')
+                                            except Exception as e:
+                                                logger.info(f'[FAILURE] Failed to save {season_title} poster for {media_title} due to: {e}')
 
                             except:
                                 logger.info(f'[FAILURE] Season poster for {media_title} not found')
