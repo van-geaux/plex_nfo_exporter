@@ -413,8 +413,6 @@ def main():
     baseurl = os.getenv("PLEX_URL", config['Base URL']).strip("'\"")
     token = os.getenv("PLEX_TOKEN", config['Token']).strip("'\"")
 
-    print(config['Token'])
-
     library_names = config['Libraries']
     # days_difference = config['days_difference']
     path_mapping = config['Path mapping']
@@ -434,8 +432,15 @@ def main():
                 url = urljoin(baseurl, f'/library/sections/{library.get("key")}/albums')
 
             response = requests.get(url, headers=headers)
+
+            if response.status_code == 400:
+                headers = {'X-Plex-Token': token, 'X-Plex-Container-Start': '0', 'X-Plex-Container-Size': '1000'}
+                response = requests.get(url, headers=headers)
             
-            if response.status_code == 200:
+            if response.status_code != 200:
+                logger.error(f'Failed to get library info with error code {response.status_code}: {response.text}')
+                sys.exit()
+            else:
                 logger.debug('Getting root...')
                 root = ET.fromstring(response.content)
                 if library.get('type') == 'movie':
@@ -616,7 +621,7 @@ def main():
                                             logger.info(f'[FAILURE] Failed to save art for {media_title} due to: {e}')
 
                                     else:
-                                        logger.info(f'[SKIPPED] Art for {media_title} skipped because fanart file is not older last updated metadata')
+                                        logger.info(f'[SKIPPED] Art for {media_title} skipped because fanart file is not older than last updated metadata')
                                 else:
                                     try:
                                         download_image(url, headers, fanart_path)
@@ -658,7 +663,7 @@ def main():
                                                     logger.info(f'[FAILURE] Failed to save {season_title} poster for {media_title} due to: {e}')
 
                                             else:
-                                                logger.info(f'[SKIPPED] {season_title} poster skipped because fanart file is not older last updated metadata')
+                                                logger.info(f'[SKIPPED] {season_title} poster skipped because fanart file is not older than last updated metadata')
 
                                         else:
                                             try:
