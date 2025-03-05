@@ -410,270 +410,312 @@ def main():
         config_content = re.sub(r'\$\{(\w+)\}', lambda match: os.getenv(match.group(1), ''), config_content)
         config = yaml.safe_load(config_content)
 
-    baseurl = os.getenv("PLEX_URL", config['Base URL']).strip("'\"")
-    token = os.getenv("PLEX_TOKEN", config['Token']).strip("'\"")
+    try:
+        baseurl = os.getenv("PLEX_URL", config['Base URL']).strip("'\"")
+        if not baseurl:
+            logger.warning('Failed to read Plex url, please check config/environment variables')
+            sys.exit()
+    except Exception as e:
+        logger.warning(f'Failed to read Plex url due to: {e}')
+        sys.exit()
+
+    try:
+        token = os.getenv("PLEX_TOKEN", config['Token']).strip("'\"")
+        if not token:
+            logger.warning('Failed to read Plex token, please check config/environment variables')
+            sys.exit()
+    except Exception as e:
+        logger.warning(f'Failed to read Plex token due to: {e}')
+        sys.exit()
 
     library_names = config['Libraries']
-    # days_difference = config['days_difference']
     path_mapping = config['Path mapping']
 
     headers = {'X-Plex-Token': token}
     library_details = get_library_details(baseurl, headers, library_names)
 
-    # current_time = datetime.now()
     check_music = 0
 
     logger.debug('Reading library...')
     for library in library_details:
-        if baseurl:
-            if check_music == 0:
-                url = urljoin(baseurl, f'/library/sections/{library.get("key")}/all')
-            else:
-                url = urljoin(baseurl, f'/library/sections/{library.get("key")}/albums')
+        if library.get('type') == 'movie':
+            library_type = 'movie'
+            library_root = 'Video'
+        elif library.get('type') == 'show':
+            library_type = 'tvshow'
+            library_root = 'Directory'
+        elif library.get('type') and check_music == 0:
+            library_type = 'artist'
+            library_root = 'Directory'
+            check_music += 1
+        elif check_music == 1:
+            library_type = 'albums'
+            library_root = 'Directory'
+            check_music -= 1
 
-            response = requests.get(url, headers=headers)
+        if check_music == 0:
+            url = urljoin(baseurl, f'/library/sections/{library.get("key")}/all')
+        else:
+            url = urljoin(baseurl, f'/library/sections/{library.get("key")}/albums')
 
-            if response.status_code == 400:
-                headers = {'X-Plex-Token': token, 'X-Plex-Container-Start': '0', 'X-Plex-Container-Size': '1000'}
-                response = requests.get(url, headers=headers)
-            
-            if response.status_code != 200:
-                logger.error(f'Failed to get library info with error code {response.status_code}: {response.text}')
-                sys.exit()
-            else:
-                logger.debug('Getting root...')
+        response = requests.get(url, headers=headers)
+
+        if response.status_code == 400:
+            start = 0
+            container_size = 1000
+            full_root = None
+
+            while True:
+                fallback_headers = {
+                    'X-Plex-Token': token,
+                    'X-Plex-Container-Start': str(start),
+                    'X-Plex-Container-Size': str(container_size)
+                }
+                print(fallback_headers)
+                
+                response = requests.get(url, headers=fallback_headers)
+
+                if response.status_code != 200:
+                    print(f"Error: {response.status_code}")
+                    break
+                
                 root = ET.fromstring(response.content)
-                if library.get('type') == 'movie':
-                    library_type = 'movie'
-                    library_root = 'Video'
-                elif library.get('type') == 'show':
-                    library_type = 'tvshow'
-                    library_root = 'Directory'
-                elif library.get('type') and check_music == 0:
-                    library_type = 'artist'
-                    library_root = 'Directory'
-                    check_music += 1
-                elif check_music == 1:
-                    library_type = 'albums'
-                    library_root = 'Directory'
-                    check_music -= 1
+
+                if full_root is None:
+                    full_root = root
+                else:
+                    library_contents = root.findall('Directory')
+                    for item in library_contents:
+                        full_root.append(item)
+
+                if len(root.findall('Directory')) < container_size:
+                    break
+
+                start += container_size
+
+        elif response.status_code == 200:
+            logger.debug('Getting root...')
+            full_root = ET.fromstring(response.content)
+        else:
+            logger.error(f'Failed to get library info with error code {response.status_code}: {response.text}')
+            sys.exit()
+                
+        library_contents = full_root.findall(library_root)
+        for content in library_contents:
+            logger.debug('Reading content...')
+            ratingkey = content.get('ratingKey')  
+            meta_url = urljoin(baseurl, f'/library/metadata/{ratingkey}')  
+            meta_response = requests.get(meta_url, headers=headers)
+            if meta_response.status_code == 200:
+                meta_root = ET.fromstring(meta_response.content).find(library_root)
+
+                media_title = meta_root.get('title')
+                
+                if library_type == 'movie':
+                    file_title = meta_root.find('Media').find('Part').get('file')
                     
-                library_contents = root.findall(library_root)
-                for content in library_contents:
-                    logger.debug('Reading content...')
-                    ratingkey = content.get('ratingKey')  
-                    meta_url = urljoin(baseurl, f'/library/metadata/{ratingkey}')  
-                    meta_response = requests.get(meta_url, headers=headers)
-                    if meta_response.status_code == 200:
-                        meta_root = ET.fromstring(meta_response.content).find(library_root)
+                if library_type == 'movie':
+                    media_path = meta_root.find('Media').find('Part').get('file')
+                    media_path = media_path[:media_path.rfind("/")]+"/"
+                    for path_list in path_mapping:
+                        media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
+                elif library_type == 'tvshow':
+                    media_path = meta_root.find('Location').get('path')+'/'
+                    for path_list in path_mapping:
+                        media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
+                elif library_type == 'artist':
+                    media_path = meta_root.find('Location').get('path')+'/'
+                    for path_list in path_mapping:
+                        media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
+                elif library_type == 'albums':
+                    track_url = urljoin(meta_url, '/children')
+                    track_response = requests.get(track_url, headers=headers)
+                    track0_path = ET.fromstring(track_response.content).findall('Track')[0].find('Media').find('Part').get('file')
+                    media_path = track0_path[:track0_path.rfind('/')]+'/'
+                    for path_list in path_mapping:
+                        media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
 
-                        media_title = meta_root.get('title')
-                        
-                        if library_type == 'movie':
-                            file_title = meta_root.find('Media').find('Part').get('file')
-                            
-                        if library_type == 'movie':
-                            media_path = meta_root.find('Media').find('Part').get('file')
-                            media_path = media_path[:media_path.rfind("/")]+"/"
-                            for path_list in path_mapping:
-                                media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
-                        elif library_type == 'tvshow':
-                            media_path = meta_root.find('Location').get('path')+'/'
-                            for path_list in path_mapping:
-                                media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
-                        elif library_type == 'artist':
-                            media_path = meta_root.find('Location').get('path')+'/'
-                            for path_list in path_mapping:
-                                media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
-                        elif library_type == 'albums':
-                            track_url = urljoin(meta_url, '/children')
-                            track_response = requests.get(track_url, headers=headers)
-                            track0_path = ET.fromstring(track_response.content).findall('Track')[0].find('Media').find('Part').get('file')
-                            media_path = track0_path[:track0_path.rfind('/')]+'/'
-                            for path_list in path_mapping:
-                                media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
+                try:
+                    movie_filename_type = config.get('Movie NFO name type', 'default').lower()
+                except Exception:
+                    movie_filename_type = 'default'
+                
+                if library_type == 'artist':
+                    nfo_path = os.path.join(media_path, 'artist.nfo')
+                elif library_type == 'albums':
+                    nfo_path = os.path.join(media_path, 'album.nfo')
+                elif library_type == 'movie' and movie_filename_type == 'title':
+                    sanitized_title = sanitize_filename(media_title)
+                    nfo_path = os.path.join(media_path, f'{sanitized_title}.nfo')
+                elif library_type == 'movie' and movie_filename_type == 'filename':
+                    file_name = file_title[file_title.rfind('/')+1:file_title.rfind('.')]
+                    nfo_path = os.path.join(media_path, f'{file_name}.nfo')
+                else:
+                    nfo_path = os.path.join(media_path, f'{library_type}.nfo')
 
-                        try:
-                            movie_filename_type = config.get('Movie NFO name type', 'default').lower()
-                        except Exception:
-                            movie_filename_type = 'default'
-                        
-                        if library_type == 'artist':
-                            nfo_path = os.path.join(media_path, 'artist.nfo')
-                        elif library_type == 'albums':
-                            nfo_path = os.path.join(media_path, 'album.nfo')
-                        elif library_type == 'movie' and movie_filename_type == 'title':
-                            sanitized_title = sanitize_filename(media_title)
-                            nfo_path = os.path.join(media_path, f'{sanitized_title}.nfo')
-                        elif library_type == 'movie' and movie_filename_type == 'filename':
-                            file_name = file_title[file_title.rfind('/')+1:file_title.rfind('.')]
-                            nfo_path = os.path.join(media_path, f'{file_name}.nfo')
+                if library_type == 'movie' and config.get('Movie Poster/art name type').lower() == 'title':
+                    poster_path = os.path.join(media_path, f'{sanitized_title}_poster.jpg')
+                    fanart_path = os.path.join(media_path, f'{sanitized_title}_fanart.jpg')
+                elif library_type == 'movie' and config.get('Movie Poster/art name type').lower() == 'filename':
+                    poster_path = os.path.join(media_path, f'{file_name}_poster.jpg')
+                    fanart_path = os.path.join(media_path, f'{file_name}_fanart.jpg')
+                else:
+                    poster_path = os.path.join(media_path, 'poster.jpg')
+                    fanart_path = os.path.join(media_path, 'fanart.jpg')
+
+                if config['Export NFO']:
+                    if os.path.exists(nfo_path):
+                        file_mod_time = int(os.path.getmtime(nfo_path))
+                        server_mod_time = int(meta_root.get('updatedAt'))
+                        time_difference = file_mod_time - server_mod_time
+
+                        if time_difference < 0:
+                            write_nfo(config, nfo_path, library_type, meta_root, media_title)
                         else:
-                            nfo_path = os.path.join(media_path, f'{library_type}.nfo')
+                            logger.info(f'[SKIPPED] NFO for {media_title} skipped because NFO file is not older than last updated metadata')
 
-                        if library_type == 'movie' and config.get('Movie Poster/art name type').lower() == 'title':
-                            poster_path = os.path.join(media_path, f'{sanitized_title}_poster.jpg')
-                            fanart_path = os.path.join(media_path, f'{sanitized_title}_fanart.jpg')
-                        elif library_type == 'movie' and config.get('Movie Poster/art name type').lower() == 'filename':
-                            poster_path = os.path.join(media_path, f'{file_name}_poster.jpg')
-                            fanart_path = os.path.join(media_path, f'{file_name}_fanart.jpg')
-                        else:
-                            poster_path = os.path.join(media_path, 'poster.jpg')
-                            fanart_path = os.path.join(media_path, 'fanart.jpg')
+                    else:
+                        write_nfo(config, nfo_path, library_type, meta_root, media_title)
 
-                        if config['Export NFO']:
-                            if os.path.exists(nfo_path):
-                                file_mod_time = int(os.path.getmtime(nfo_path))
-                                server_mod_time = int(meta_root.get('updatedAt'))
-                                time_difference = file_mod_time - server_mod_time
+                if config['Export episode NFO'] and (library_type == 'tvshow'):
+                    try:
+                        meta_season = urljoin(meta_url + '/', 'children')
+                        meta_season_response = requests.get(meta_season, headers=headers)
+                        if meta_season_response.status_code == 200:
+                            meta_season_root = ET.fromstring(meta_season_response.content).findall('Directory')
 
-                                if time_difference < 0:
-                                    write_nfo(config, nfo_path, library_type, meta_root, media_title)
-                                else:
-                                    logger.info(f'[SKIPPED] NFO for {media_title} skipped because NFO file is not older than last updated metadata')
+                            for season in meta_season_root:
+                                season_key = season.get('ratingKey')
 
-                            else:
-                                write_nfo(config, nfo_path, library_type, meta_root, media_title)
+                                season_url = urljoin(meta_url[:meta_url.rfind('/')] + '/', f'{season_key}/children')
+                                season_url_response = requests.get(season_url, headers=headers)
+                                if season_url_response.status_code == 200:
+                                    season_root = ET.fromstring(season_url_response.content).findall('Video')
 
-                        if config['Export episode NFO'] and (library_type == 'tvshow'):
-                            try:
-                                meta_season = urljoin(meta_url + '/', 'children')
-                                meta_season_response = requests.get(meta_season, headers=headers)
-                                if meta_season_response.status_code == 200:
-                                    meta_season_root = ET.fromstring(meta_season_response.content).findall('Directory')
+                                    for episode in season_root:
+                                        episode_key = episode.get('ratingKey')
 
-                                    for season in meta_season_root:
-                                        season_key = season.get('ratingKey')
+                                        episode_url = urljoin(meta_url[:meta_url.rfind('/')] + '/', episode_key)
+                                        episode_url_response = requests.get(episode_url, headers=headers)
+                                        episode_root = ET.fromstring(episode_url_response.content).find('Video')
 
-                                        season_url = urljoin(meta_url[:meta_url.rfind('/')] + '/', f'{season_key}/children')
-                                        season_url_response = requests.get(season_url, headers=headers)
-                                        if season_url_response.status_code == 200:
-                                            season_root = ET.fromstring(season_url_response.content).findall('Video')
+                                        episode_path = episode_root.find('Media').find('Part').get('file')
+                                        episode_nfo_path = episode_path[:episode_path.rfind('.')] + '.nfo'
 
-                                            for episode in season_root:
-                                                episode_key = episode.get('ratingKey')
+                                        for path_list in path_mapping:
+                                            episode_nfo_path = episode_nfo_path.replace(path_list.get('plex'), path_list.get('local'))
 
-                                                episode_url = urljoin(meta_url[:meta_url.rfind('/')] + '/', episode_key)
-                                                episode_url_response = requests.get(episode_url, headers=headers)
-                                                episode_root = ET.fromstring(episode_url_response.content).find('Video')
-
-                                                episode_path = episode_root.find('Media').find('Part').get('file')
-                                                episode_nfo_path = episode_path[:episode_path.rfind('.')] + '.nfo'
-
-                                                for path_list in path_mapping:
-                                                    episode_nfo_path = episode_nfo_path.replace(path_list.get('plex'), path_list.get('local'))
-
-                                                if os.path.exists(episode_nfo_path):
-                                                    file_mod_time = int(os.path.getmtime(episode_nfo_path))
-                                                    server_mod_time = int(meta_root.get('updatedAt'))
-                                                    time_difference = file_mod_time - server_mod_time
-
-                                                    if time_difference < 0:
-                                                        write_episode_nfo(episode_nfo_path, episode_root, media_title)
-                                                    else:
-                                                        logger.info(f'[SKIPPED] Episodic NFO for {media_title} skipped because NFO file is not older than last updated metadata')
-
-                                                else:
-                                                    write_episode_nfo(episode_nfo_path, episode_root, media_title)
-
-                            except Exception as e:
-                                logger.error(f'[FAILURE] Failed to write episodic NFO for {media_title} due to {e}')
-
-                        if config['Export poster']:
-                            try:
-                                url = urljoin(baseurl, meta_root.get('thumb'))
-                                if os.path.exists(poster_path):
-                                    file_mod_time = int(os.path.getmtime(poster_path))
-                                    server_mod_time = int(meta_root.get('updatedAt'))
-                                    time_difference = file_mod_time - server_mod_time
-                                                        
-                                    if time_difference < 0:
-                                        try:
-                                            download_image(url, headers, poster_path)
-                                            logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
-                                        except Exception as e:
-                                            logger.info(f'[FAILURE] Failed to save poster for {media_title} due to: {e}')
-
-                                    else:
-                                        logger.info(f'[SKIPPED] Poster for {media_title} skipped because poster file is not older than last updated metadata')
-                                else:
-                                    try:
-                                        download_image(url, headers, poster_path)
-                                        logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
-                                    except Exception as e:
-                                        logger.info(f'[FAILURE] Failed to save poster for {media_title} due to: {e}')
-                            except:
-                                logger.info(f'[FAILURE] Poster for {media_title} not found')
-
-                        if config['Export fanart']:
-                            try:
-                                url = urljoin(baseurl, meta_root.get('art'))
-                                if os.path.exists(fanart_path):
-                                    file_mod_time = int(os.path.getmtime(poster_path))
-                                    server_mod_time = int(meta_root.get('updatedAt'))
-                                    time_difference = file_mod_time - server_mod_time
-                                                        
-                                    if time_difference < 0:
-                                        try:
-                                            download_image(url, headers, fanart_path)
-                                            logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
-                                        except Exception as e:
-                                            logger.info(f'[FAILURE] Failed to save art for {media_title} due to: {e}')
-
-                                    else:
-                                        logger.info(f'[SKIPPED] Art for {media_title} skipped because fanart file is not older than last updated metadata')
-                                else:
-                                    try:
-                                        download_image(url, headers, fanart_path)
-                                        logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
-                                    except Exception as e:
-                                        logger.info(f'[FAILURE] Failed to save art for {media_title} due to: {e}')
-                            except:
-                                logger.info(f'[FAILURE] Art for {media_title} not found')
-
-                        if config['Export season poster'] and library_type == 'tvshow':
-                            try:
-                                season_url = urljoin(f'{meta_url}/', 'children')
-                                season_response = requests.get(season_url, headers=headers)
-                                if season_response.status_code == 200:
-                                    season_root = ET.fromstring(season_response.content).findall('Directory')
-                                    for season_dir in season_root:
-                                        if not season_dir.get('title') or season_dir.get('title') == 'All episodes':
-                                            continue
-
-                                        season_title = season_dir.get('title').lower().replace(' ', '')
-                                        if season_title == 'Specials':
-                                            season_path = os.path.join(media_path, f'season-{season_title}-cover.jpg')
-                                        elif season_title == 'Miniseries':
-                                            season_path = os.path.join(media_path, f"season1-cover.jpg")
-                                        else:
-                                            season_path = os.path.join(media_path, f"{season_title}-cover.jpg")
-                                        
-                                        url = urljoin(baseurl, season_dir.get('thumb'))
-                                        if os.path.exists(season_path):
-                                            file_mod_time = int(os.path.getmtime(season_path))
+                                        if os.path.exists(episode_nfo_path):
+                                            file_mod_time = int(os.path.getmtime(episode_nfo_path))
                                             server_mod_time = int(meta_root.get('updatedAt'))
                                             time_difference = file_mod_time - server_mod_time
 
                                             if time_difference < 0:
-                                                try:
-                                                    download_image(url, headers, season_path)
-                                                    logger.info(f'[SUCCESS] {season_title} poster for {media_title} successfully saved to {season_path}')
-                                                except Exception as e:
-                                                    logger.info(f'[FAILURE] Failed to save {season_title} poster for {media_title} due to: {e}')
-
+                                                write_episode_nfo(episode_nfo_path, episode_root, media_title)
                                             else:
-                                                logger.info(f'[SKIPPED] {season_title} poster skipped because fanart file is not older than last updated metadata')
+                                                logger.info(f'[SKIPPED] Episodic NFO for {media_title} skipped because NFO file is not older than last updated metadata')
 
                                         else:
-                                            try:
-                                                download_image(url, headers, season_path)
-                                                logger.info(f'[SUCCESS] {season_title} poster for {media_title} successfully saved to {season_path}')
-                                            except Exception as e:
-                                                logger.info(f'[FAILURE] Failed to save {season_title} poster for {media_title} due to: {e}')
+                                            write_episode_nfo(episode_nfo_path, episode_root, media_title)
 
-                            except:
-                                logger.info(f'[FAILURE] Season poster for {media_title} not found')
+                    except Exception as e:
+                        logger.error(f'[FAILURE] Failed to write episodic NFO for {media_title} due to {e}')
+
+                if config['Export poster']:
+                    try:
+                        url = urljoin(baseurl, meta_root.get('thumb'))
+                        if os.path.exists(poster_path):
+                            file_mod_time = int(os.path.getmtime(poster_path))
+                            server_mod_time = int(meta_root.get('updatedAt'))
+                            time_difference = file_mod_time - server_mod_time
+                                                
+                            if time_difference < 0:
+                                try:
+                                    download_image(url, headers, poster_path)
+                                    logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
+                                except Exception as e:
+                                    logger.info(f'[FAILURE] Failed to save poster for {media_title} due to: {e}')
+
+                            else:
+                                logger.info(f'[SKIPPED] Poster for {media_title} skipped because poster file is not older than last updated metadata')
+                        else:
+                            try:
+                                download_image(url, headers, poster_path)
+                                logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
+                            except Exception as e:
+                                logger.info(f'[FAILURE] Failed to save poster for {media_title} due to: {e}')
+                    except:
+                        logger.info(f'[FAILURE] Poster for {media_title} not found')
+
+                if config['Export fanart']:
+                    try:
+                        url = urljoin(baseurl, meta_root.get('art'))
+                        if os.path.exists(fanart_path):
+                            file_mod_time = int(os.path.getmtime(poster_path))
+                            server_mod_time = int(meta_root.get('updatedAt'))
+                            time_difference = file_mod_time - server_mod_time
+                                                
+                            if time_difference < 0:
+                                try:
+                                    download_image(url, headers, fanart_path)
+                                    logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
+                                except Exception as e:
+                                    logger.info(f'[FAILURE] Failed to save art for {media_title} due to: {e}')
+
+                            else:
+                                logger.info(f'[SKIPPED] Art for {media_title} skipped because fanart file is not older than last updated metadata')
+                        else:
+                            try:
+                                download_image(url, headers, fanart_path)
+                                logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
+                            except Exception as e:
+                                logger.info(f'[FAILURE] Failed to save art for {media_title} due to: {e}')
+                    except:
+                        logger.info(f'[FAILURE] Art for {media_title} not found')
+
+                if config['Export season poster'] and library_type == 'tvshow':
+                    try:
+                        season_url = urljoin(f'{meta_url}/', 'children')
+                        season_response = requests.get(season_url, headers=headers)
+                        if season_response.status_code == 200:
+                            season_root = ET.fromstring(season_response.content).findall('Directory')
+                            for season_dir in season_root:
+                                if not season_dir.get('title') or season_dir.get('title') == 'All episodes':
+                                    continue
+
+                                season_title = season_dir.get('title').lower().replace(' ', '')
+                                if season_title == 'Specials':
+                                    season_path = os.path.join(media_path, f'season-{season_title}-cover.jpg')
+                                elif season_title == 'Miniseries':
+                                    season_path = os.path.join(media_path, f"season1-cover.jpg")
+                                else:
+                                    season_path = os.path.join(media_path, f"{season_title}-cover.jpg")
+                                
+                                url = urljoin(baseurl, season_dir.get('thumb'))
+                                if os.path.exists(season_path):
+                                    file_mod_time = int(os.path.getmtime(season_path))
+                                    server_mod_time = int(meta_root.get('updatedAt'))
+                                    time_difference = file_mod_time - server_mod_time
+
+                                    if time_difference < 0:
+                                        try:
+                                            download_image(url, headers, season_path)
+                                            logger.info(f'[SUCCESS] {season_title} poster for {media_title} successfully saved to {season_path}')
+                                        except Exception as e:
+                                            logger.info(f'[FAILURE] Failed to save {season_title} poster for {media_title} due to: {e}')
+
+                                    else:
+                                        logger.info(f'[SKIPPED] {season_title} poster skipped because fanart file is not older than last updated metadata')
+
+                                else:
+                                    try:
+                                        download_image(url, headers, season_path)
+                                        logger.info(f'[SUCCESS] {season_title} poster for {media_title} successfully saved to {season_path}')
+                                    except Exception as e:
+                                        logger.info(f'[FAILURE] Failed to save {season_title} poster for {media_title} due to: {e}')
+
+                    except:
+                        logger.info(f'[FAILURE] Season poster for {media_title} not found')
 
 if __name__ == '__main__':
     ensure_config_file_exists()
