@@ -231,7 +231,7 @@ def download_image(url:str, headers:dict, save_path:str) -> None:
         
             image = Image.open(BytesIO(response.content))
 
-            if image.mode == "RGBA":
+            if image.mode in ("RGBA", "P"):
                 image = image.convert("RGB")
 
             image.save(save_path)
@@ -471,12 +471,11 @@ def main():
                     'X-Plex-Container-Start': str(start),
                     'X-Plex-Container-Size': str(container_size)
                 }
-                print(fallback_headers)
                 
                 response = requests.get(url, headers=fallback_headers)
 
                 if response.status_code != 200:
-                    print(f"Error: {response.status_code}")
+                    logger.error(f"Error: {response.status_code}")
                     break
                 
                 root = ET.fromstring(response.content)
