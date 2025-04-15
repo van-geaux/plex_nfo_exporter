@@ -2,6 +2,8 @@
 
 **Plex NFO Exporter** is a script that extracts metadata, posters, and background art from Plex and generates compatible files for use with other media servers like Jellyfin.  
 
+![alt text](image.png)
+
 ---
 
 ## Features
