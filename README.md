@@ -76,46 +76,6 @@ PLEX_URL='http://plex_ip:plex_port' # i.e. http://192.168.1.2:32400 or https://p
 PLEX_TOKEN='super-scecret-token'
 ```
 
-#### Building the Image Yourself
-
-To build and run the image from the source code, follow these steps:
-
-1. Clone the Repository
-   ```bash
-   git clone https://github.com/van-geaux/plex_nfo_exporter.git
-   ```
-   ```bash
-   cd plex_nfo_exporter
-   ```
-
-2. Build the Docker Image
-   ```bash
-   docker build -t plex_nfo_exporter:latest .
-   ```
-
-3. Run the Custom Image
-   ```bash
-   docker run --rm \
-      -v /path/to/config:/app/config \
-      -v /path/to/config/logs:/app/logs \
-      -v /path/to/media:/media \
-      -e TZ=Asia/Jakarta \
-      -e CRON_SCHEDULE=0 4 * * * \
-      -e RUN_IMMEDIATELY=false \
-      -e PLEX_URL='http://plex_ip:port' \
-      -e PLEX_TOKEN='super-secret-token' \
-      ghcr.io/van-geaux/plex_nfo_exporter:latest
-   ```
-
-After first deployment, fill the generated `config.yml` and `.env` before restarting it again.
-`.env` file will only be generated if you are not using `PLEX_URL` and `PLEX_TOKEN` environment variables
-
-For the `.env`, fill it with:
-```yaml
-PLEX_URL='http://plex_ip:plex_port' # i.e. http://192.168.1.2:32400 or https://plex.yourdomain.tld if using proxy
-PLEX_TOKEN='super-scecret-token'
-```
-
 ### Running Manually
 
 1. **Download and Prepare the Script**  
