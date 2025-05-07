@@ -7,6 +7,7 @@ from pathlib import Path
 from PIL import Image
 from urllib.parse import urljoin
 
+import argparse
 import logging
 import os
 import re
@@ -382,10 +383,10 @@ def write_episode_nfo(episode_nfo_path, episode_root, media_title):
 
             nfo.write('</episodedetails>')
 
-            logger.info(f'[SUCCESS] Episodic NFO for {media_title} successfully saved to {episode_nfo_path}')
+            logger.info(f'[SUCCESS] Episode NFO for {media_title} successfully saved to {episode_nfo_path}')
 
     except Exception as e:
-        logger.error(f'[FAILURE] Failed to write episodic NFO for {media_title} due to {e}')
+        logger.error(f'[FAILURE] Failed to write episode NFO for {media_title} due to {e}')
 
 def sanitize_filename(filename):
     filename = filename.replace(": ", " - ").replace(":", "-").replace("/", "-").replace("\\", "-")
@@ -394,7 +395,7 @@ def sanitize_filename(filename):
     filename = filename.rstrip('.')
     return filename
 
-def main():
+def main(args):
     logger.debug('Entering main...')
 
     if os.path.exists('/app/config/.env'):
@@ -411,8 +412,10 @@ def main():
         config = yaml.safe_load(config_content)
 
     try:
-        baseurl = os.getenv("PLEX_URL", config['Base URL']).strip("'\"")
-        if not baseurl:
+        baseurl = args.url or os.getenv("PLEX_URL") or config.get("Base URL")
+        if baseurl:
+            baseurl = baseurl.strip("'\"")
+        else:
             logger.warning('Failed to read Plex url, please check config/environment variables')
             sys.exit()
     except Exception as e:
@@ -420,15 +423,17 @@ def main():
         sys.exit()
 
     try:
-        token = os.getenv("PLEX_TOKEN", config['Token']).strip("'\"")
-        if not token:
+        token = args.token or os.getenv("PLEX_TOKEN") or config['Token']
+        if token:
+            token = token.strip("'\"")
+        else:
             logger.warning('Failed to read Plex token, please check config/environment variables')
             sys.exit()
     except Exception as e:
         logger.warning(f'Failed to read Plex token due to: {e}')
         sys.exit()
 
-    library_names = config['Libraries']
+    library_names = args.library or config['Libraries']
     path_mapping = config['Path mapping']
 
     headers = {'X-Plex-Token': token}
@@ -509,6 +514,10 @@ def main():
                 meta_root = ET.fromstring(meta_response.content).find(library_root)
 
                 media_title = meta_root.get('title')
+
+                if args.title:
+                    if media_title not in args.title:
+                        continue
                 
                 if library_type == 'movie':
                     file_title = meta_root.find('Media').find('Part').get('file')
@@ -535,9 +544,14 @@ def main():
                         media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
 
                 try:
-                    movie_filename_type = config.get('Movie NFO name type', 'default').lower()
+                    movie_filename_type = args.nfo_name_type.lower() or config.get('Movie NFO name type', 'default').lower()
                 except Exception:
                     movie_filename_type = 'default'
+
+                try:
+                    image_filename_type = args.image_name_type.lower() or config.get('Movie Poster/art name type').lower()
+                except Exception:
+                    image_filename_type = 'default'
                 
                 if library_type == 'artist':
                     nfo_path = os.path.join(media_path, 'artist.nfo')
@@ -552,172 +566,250 @@ def main():
                 else:
                     nfo_path = os.path.join(media_path, f'{library_type}.nfo')
 
-                if library_type == 'movie' and config.get('Movie Poster/art name type').lower() == 'title':
+                if library_type == 'movie' and image_filename_type == 'title':
                     poster_path = os.path.join(media_path, f'{sanitized_title}_poster.jpg')
                     fanart_path = os.path.join(media_path, f'{sanitized_title}_fanart.jpg')
-                elif library_type == 'movie' and config.get('Movie Poster/art name type').lower() == 'filename':
+                elif library_type == 'movie' and image_filename_type == 'filename':
                     poster_path = os.path.join(media_path, f'{file_name}_poster.jpg')
                     fanart_path = os.path.join(media_path, f'{file_name}_fanart.jpg')
                 else:
                     poster_path = os.path.join(media_path, 'poster.jpg')
                     fanart_path = os.path.join(media_path, 'fanart.jpg')
 
-                if config['Export NFO']:
-                    if os.path.exists(nfo_path):
-                        file_mod_time = int(os.path.getmtime(nfo_path))
-                        server_mod_time = int(meta_root.get('updatedAt'))
-                        time_difference = file_mod_time - server_mod_time
+                export_nfo = args.export_nfo if args.export_nfo is not None else config.get('Export NFO', False)
+                export_episode_nfo = args.export_episode_nfo if args.export_episode_nfo is not None else config.get('Export episode NFO', False)
+                export_poster = args.export_poster if args.export_poster is not None else config.get('Export poster', False)
+                export_fanart = args.export_fanart if args.export_fanart is not None else config.get('Export fanart', False)
+                export_season_poster = args.export_season_poster if args.export_season_poster is not None else config.get('Export season poster', False)
 
-                        if time_difference < 0:
-                            write_nfo(config, nfo_path, library_type, meta_root, media_title)
+                if export_nfo:
+                    if args.dry_run or os.getenv("DRY_RUN"):
+                        if os.path.exists(nfo_path):
+                            logger.info(f'[DRY RUN] NFO file for {media_title} will be checked and rewritten if older than last updated metadata')
                         else:
-                            logger.info(f'[SKIPPED] NFO for {media_title} skipped because NFO file is not older than last updated metadata')
+                            logger.info(f'[DRY RUN] NFO for {media_title} will be saved to {nfo_path}')
 
                     else:
-                        write_nfo(config, nfo_path, library_type, meta_root, media_title)
+                        try:
+                            if os.path.exists(nfo_path):                                
+                                file_mod_time = int(os.path.getmtime(nfo_path))
+                                server_mod_time = int(meta_root.get('updatedAt'))
+                                time_difference = file_mod_time - server_mod_time
 
-                if config['Export episode NFO'] and (library_type == 'tvshow'):
-                    try:
-                        meta_season = urljoin(meta_url + '/', 'children')
-                        meta_season_response = requests.get(meta_season, headers=headers)
-                        if meta_season_response.status_code == 200:
-                            meta_season_root = ET.fromstring(meta_season_response.content).findall('Directory')
+                                if time_difference < 0:
+                                    write_nfo(config, nfo_path, library_type, meta_root, media_title)
+                                else:
+                                    logger.info(f'[SKIPPED] NFO for {media_title} skipped because NFO file is not older than last updated metadata')
 
-                            for season in meta_season_root:
-                                season_key = season.get('ratingKey')
+                            else:
+                                write_nfo(config, nfo_path, library_type, meta_root, media_title)
+                        except Exception as e:
+                            logger.error(f'[FAILURE] Failed to write NFO for {media_title} due to {e}')
 
-                                season_url = urljoin(meta_url[:meta_url.rfind('/')] + '/', f'{season_key}/children')
-                                season_url_response = requests.get(season_url, headers=headers)
-                                if season_url_response.status_code == 200:
-                                    season_root = ET.fromstring(season_url_response.content).findall('Video')
+                if export_episode_nfo and (library_type == 'tvshow'):
+                    if args.dry_run or os.getenv("DRY_RUN"):
+                        if os.path.exists(episode_path):
+                            logger.info(f'[DRY RUN] Episode NFO file for {media_title} will be checked and rewritten if older than last updated metadata')
+                        else:
+                            logger.info(f'[DRY RUN] Episode NFO for {media_title} will be saved')
 
-                                    for episode in season_root:
-                                        episode_key = episode.get('ratingKey')
+                    else:
+                        try:
+                            meta_season = urljoin(meta_url + '/', 'children')
+                            meta_season_response = requests.get(meta_season, headers=headers)
+                            if meta_season_response.status_code == 200:
+                                meta_season_root = ET.fromstring(meta_season_response.content).findall('Directory')
 
-                                        episode_url = urljoin(meta_url[:meta_url.rfind('/')] + '/', episode_key)
-                                        episode_url_response = requests.get(episode_url, headers=headers)
-                                        episode_root = ET.fromstring(episode_url_response.content).find('Video')
+                                for season in meta_season_root:
+                                    season_key = season.get('ratingKey')
 
-                                        episode_path = episode_root.find('Media').find('Part').get('file')
-                                        episode_nfo_path = episode_path[:episode_path.rfind('.')] + '.nfo'
+                                    season_url = urljoin(meta_url[:meta_url.rfind('/')] + '/', f'{season_key}/children')
+                                    season_url_response = requests.get(season_url, headers=headers)
+                                    if season_url_response.status_code == 200:
+                                        season_root = ET.fromstring(season_url_response.content).findall('Video')
 
-                                        for path_list in path_mapping:
-                                            episode_nfo_path = episode_nfo_path.replace(path_list.get('plex'), path_list.get('local'))
+                                        for episode in season_root:
+                                            episode_key = episode.get('ratingKey')
 
-                                        if os.path.exists(episode_nfo_path):
-                                            file_mod_time = int(os.path.getmtime(episode_nfo_path))
-                                            server_mod_time = int(meta_root.get('updatedAt'))
-                                            time_difference = file_mod_time - server_mod_time
+                                            episode_url = urljoin(meta_url[:meta_url.rfind('/')] + '/', episode_key)
+                                            episode_url_response = requests.get(episode_url, headers=headers)
+                                            episode_root = ET.fromstring(episode_url_response.content).find('Video')
 
-                                            if time_difference < 0:
-                                                write_episode_nfo(episode_nfo_path, episode_root, media_title)
+                                            episode_path = episode_root.find('Media').find('Part').get('file')
+                                            episode_nfo_path = episode_path[:episode_path.rfind('.')] + '.nfo'
+
+                                            for path_list in path_mapping:
+                                                episode_nfo_path = episode_nfo_path.replace(path_list.get('plex'), path_list.get('local'))
+
+                                            if os.path.exists(episode_nfo_path):
+                                                file_mod_time = int(os.path.getmtime(episode_nfo_path))
+                                                server_mod_time = int(meta_root.get('updatedAt'))
+                                                time_difference = file_mod_time - server_mod_time
+
+                                                if time_difference < 0:
+                                                    if args.dry_run or os.getenv("DRY_RUN"):
+                                                        logger.info(f'[DRY RUN] Will rewrite episode NFO for {media_title}')
+                                                    else:
+                                                        write_episode_nfo(episode_nfo_path, episode_root, media_title)
+                                                else:
+                                                    if args.dry_run or os.getenv("DRY_RUN"):
+                                                        logger.info(f'[SKIPPED] Episode NFO for {media_title} will be skipped because NFO file is not older than last updated metadata')
+                                                    else:
+                                                        logger.info(f'[SKIPPED] Episode NFO for {media_title} skipped because NFO file is not older than last updated metadata')
+
                                             else:
-                                                logger.info(f'[SKIPPED] Episodic NFO for {media_title} skipped because NFO file is not older than last updated metadata')
+                                                write_episode_nfo(episode_nfo_path, episode_root, media_title)
 
-                                        else:
-                                            write_episode_nfo(episode_nfo_path, episode_root, media_title)
+                        except Exception as e:
+                            logger.error(f'[FAILURE] Failed to write episodic NFO for {media_title} due to {e}')
 
-                    except Exception as e:
-                        logger.error(f'[FAILURE] Failed to write episodic NFO for {media_title} due to {e}')
-
-                if config['Export poster']:
-                    try:
-                        url = urljoin(baseurl, meta_root.get('thumb'))
+                if export_poster:
+                    if args.dry_run or os.getenv("DRY_RUN"):
                         if os.path.exists(poster_path):
-                            file_mod_time = int(os.path.getmtime(poster_path))
-                            server_mod_time = int(meta_root.get('updatedAt'))
-                            time_difference = file_mod_time - server_mod_time
-                                                
-                            if time_difference < 0:
+                            logger.info(f'[DRY RUN] Poster for {media_title} will be checked and rewritten if older than last updated metadata')
+                        else:
+                            logger.info(f'[DRY RUN] Poster for {media_title} will be saved to {poster_path}')
+
+                    else:
+                        try:
+                            url = urljoin(baseurl, meta_root.get('thumb'))
+                            if os.path.exists(poster_path):
+                                file_mod_time = int(os.path.getmtime(poster_path))
+                                server_mod_time = int(meta_root.get('updatedAt'))
+                                time_difference = file_mod_time - server_mod_time
+                                                    
+                                if time_difference < 0:
+                                    try:
+                                        download_image(url, headers, poster_path)
+                                        logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
+                                    except Exception as e:
+                                        logger.info(f'[FAILURE] Failed to save poster for {media_title} due to: {e}')
+
+                                else:
+                                    logger.info(f'[SKIPPED] Poster for {media_title} skipped because poster file is not older than last updated metadata')
+                            else:
                                 try:
                                     download_image(url, headers, poster_path)
                                     logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
                                 except Exception as e:
                                     logger.info(f'[FAILURE] Failed to save poster for {media_title} due to: {e}')
+                        except:
+                            logger.info(f'[FAILURE] Poster for {media_title} not found')
 
-                            else:
-                                logger.info(f'[SKIPPED] Poster for {media_title} skipped because poster file is not older than last updated metadata')
+                if export_fanart:
+                    if args.dry_run or os.getenv("DRY_RUN"):
+                        if os.path.exists(poster_path):
+                            logger.info(f'[DRY RUN] Fanart for {media_title} will be checked and rewritten if older than last updated metadata')
                         else:
-                            try:
-                                download_image(url, headers, poster_path)
-                                logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
-                            except Exception as e:
-                                logger.info(f'[FAILURE] Failed to save poster for {media_title} due to: {e}')
-                    except:
-                        logger.info(f'[FAILURE] Poster for {media_title} not found')
+                            logger.info(f'[DRY RUN] Fanart for {media_title} will be saved to {fanart_path}')
 
-                if config['Export fanart']:
-                    try:
-                        url = urljoin(baseurl, meta_root.get('art'))
-                        if os.path.exists(fanart_path):
-                            file_mod_time = int(os.path.getmtime(poster_path))
-                            server_mod_time = int(meta_root.get('updatedAt'))
-                            time_difference = file_mod_time - server_mod_time
-                                                
-                            if time_difference < 0:
+                    else:
+                        try:
+                            url = urljoin(baseurl, meta_root.get('art'))
+                            if os.path.exists(fanart_path):
+                                file_mod_time = int(os.path.getmtime(poster_path))
+                                server_mod_time = int(meta_root.get('updatedAt'))
+                                time_difference = file_mod_time - server_mod_time
+                                                    
+                                if time_difference < 0:
+                                    try:
+                                        download_image(url, headers, fanart_path)
+                                        logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
+                                    except Exception as e:
+                                        logger.info(f'[FAILURE] Failed to save art for {media_title} due to: {e}')
+
+                                else:
+                                    logger.info(f'[SKIPPED] Art for {media_title} skipped because fanart file is not older than last updated metadata')
+                            else:
                                 try:
                                     download_image(url, headers, fanart_path)
                                     logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
                                 except Exception as e:
                                     logger.info(f'[FAILURE] Failed to save art for {media_title} due to: {e}')
+                        except:
+                            logger.info(f'[FAILURE] Art for {media_title} not found')
 
-                            else:
-                                logger.info(f'[SKIPPED] Art for {media_title} skipped because fanart file is not older than last updated metadata')
+                if export_season_poster and library_type == 'tvshow':
+                    if args.dry_run or os.getenv("DRY_RUN"):
+                        if os.path.exists(poster_path):
+                            logger.info(f'[DRY RUN] Season poster for {media_title} will be checked and rewritten if older than last updated metadata')
                         else:
-                            try:
-                                download_image(url, headers, fanart_path)
-                                logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
-                            except Exception as e:
-                                logger.info(f'[FAILURE] Failed to save art for {media_title} due to: {e}')
-                    except:
-                        logger.info(f'[FAILURE] Art for {media_title} not found')
+                            logger.info(f'[DRY RUN] Season poster for {media_title} will be saved')
 
-                if config['Export season poster'] and library_type == 'tvshow':
-                    try:
-                        season_url = urljoin(f'{meta_url}/', 'children')
-                        season_response = requests.get(season_url, headers=headers)
-                        if season_response.status_code == 200:
-                            season_root = ET.fromstring(season_response.content).findall('Directory')
-                            for season_dir in season_root:
-                                if not season_dir.get('title') or season_dir.get('title') == 'All episodes':
-                                    continue
+                    else:
+                        try:
+                            season_url = urljoin(f'{meta_url}/', 'children')
+                            season_response = requests.get(season_url, headers=headers)
+                            if season_response.status_code == 200:
+                                season_root = ET.fromstring(season_response.content).findall('Directory')
+                                for season_dir in season_root:
+                                    if not season_dir.get('title') or season_dir.get('title') == 'All episodes':
+                                        continue
 
-                                season_title = season_dir.get('title').lower().replace(' ', '')
-                                if season_title == 'Specials':
-                                    season_path = os.path.join(media_path, f'season-{season_title}-cover.jpg')
-                                elif season_title == 'Miniseries':
-                                    season_path = os.path.join(media_path, f"season1-cover.jpg")
-                                else:
-                                    season_path = os.path.join(media_path, f"{season_title}-cover.jpg")
-                                
-                                url = urljoin(baseurl, season_dir.get('thumb'))
-                                if os.path.exists(season_path):
-                                    file_mod_time = int(os.path.getmtime(season_path))
-                                    server_mod_time = int(meta_root.get('updatedAt'))
-                                    time_difference = file_mod_time - server_mod_time
+                                    season_title = season_dir.get('title').lower().replace(' ', '')
+                                    if season_title == 'Specials':
+                                        season_path = os.path.join(media_path, f'season-{season_title}-cover.jpg')
+                                    elif season_title == 'Miniseries':
+                                        season_path = os.path.join(media_path, f"season1-cover.jpg")
+                                    else:
+                                        season_path = os.path.join(media_path, f"{season_title}-cover.jpg")
+                                    
+                                    url = urljoin(baseurl, season_dir.get('thumb'))
+                                    if os.path.exists(season_path):
+                                        file_mod_time = int(os.path.getmtime(season_path))
+                                        server_mod_time = int(meta_root.get('updatedAt'))
+                                        time_difference = file_mod_time - server_mod_time
 
-                                    if time_difference < 0:
+                                        if time_difference < 0:
+                                            try:
+                                                download_image(url, headers, season_path)
+                                                logger.info(f'[SUCCESS] {season_title} poster for {media_title} successfully saved to {season_path}')
+                                            except Exception as e:
+                                                logger.info(f'[FAILURE] Failed to save {season_title} poster for {media_title} due to: {e}')
+
+                                        else:
+                                            logger.info(f'[SKIPPED] {season_title} poster skipped because fanart file is not older than last updated metadata')
+
+                                    else:
                                         try:
                                             download_image(url, headers, season_path)
                                             logger.info(f'[SUCCESS] {season_title} poster for {media_title} successfully saved to {season_path}')
                                         except Exception as e:
                                             logger.info(f'[FAILURE] Failed to save {season_title} poster for {media_title} due to: {e}')
 
-                                    else:
-                                        logger.info(f'[SKIPPED] {season_title} poster skipped because fanart file is not older than last updated metadata')
-
-                                else:
-                                    try:
-                                        download_image(url, headers, season_path)
-                                        logger.info(f'[SUCCESS] {season_title} poster for {media_title} successfully saved to {season_path}')
-                                    except Exception as e:
-                                        logger.info(f'[FAILURE] Failed to save {season_title} poster for {media_title} due to: {e}')
-
-                    except:
-                        logger.info(f'[FAILURE] Season poster for {media_title} not found')
+                        except:
+                            logger.info(f'[FAILURE] Season poster for {media_title} not found')
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Export metadata and poster/art from plex to NFO and image files.")
+    parser.add_argument("--url", "-u", help="Plex server base url")
+    parser.add_argument("--token", help="Plex token")
+    parser.add_argument("--library", "-l", nargs='+', help="Library name(s) to process.")
+    parser.add_argument("--title", "-t", nargs='+', help="Media title(s) to process.")
+
+    parser.add_argument("--nfo-name-type", choices=["default", "title", "filename"], default="default")
+    parser.add_argument("--image-name-type", choices=["default", "title", "filename"], default="default")
+
+    parser.add_argument("--export-nfo", dest="export_nfo", action="store_true", help="Export NFO files")
+    parser.add_argument("--no-export-nfo", dest="export_nfo", action="store_false", help="Do not export NFO files")
+
+    parser.add_argument("--export-poster", dest="export_poster", action="store_true", help="Export posters")
+    parser.add_argument("--no-export-poster", dest="export_poster", action="store_false")
+
+    parser.add_argument("--export-fanart", dest="export_fanart", action="store_true", help="Export fanarts")
+    parser.add_argument("--no-export-fanart", dest="export_fanart", action="store_false")
+
+    parser.add_argument("--export-season-poster", dest="export_season_poster", action="store_true", help="Export season poster")
+    parser.add_argument("--no-export-season-poster", dest="export_season_poster", action="store_false")
+
+    parser.add_argument("--export-episode-nfo", dest="export_episode_nfo", action="store_true", help="Export episode NFO files")
+    parser.add_argument("--no-export-episode-nfo", dest="export_episode_nfo", action="store_false")
+
+    parser.add_argument("--dry-run", action="store_true", help="Simulate actions without making any changes")
+
+    args = parser.parse_args()
+
     ensure_config_file_exists()
     ensure_env_file_exists()  
     logger = set_logger()
-    main()
+    main(args)

@@ -37,6 +37,7 @@ docker run --rm \
   -e RUN_IMMEDIATELY=false \
   -e PLEX_URL='http://plex_ip:port' \
   -e PLEX_TOKEN='super-secret-token' \
+  -e DRY_RUN=false \
   ghcr.io/van-geaux/plex_nfo_exporter:latest
 ```
 
@@ -61,6 +62,7 @@ services:
       - RUN_IMMEDIATELY=false  # if true will run immediately at start regardless of cron
       - PLEX_URL='http://plex_ip:port' # optional, you need to set in config.yml otherwise
       - PLEX_TOKEN='super-secret-token' # optional, you need to set in config.yml otherwise
+      - DRY_RUN=false # optional, will simulate actions without writing any files
     volumes:
       - /path/to/config:/app/config
       - /path/to/config/logs:/app/logs # optional, you need to create the logs folder if you want to mount it
@@ -115,6 +117,51 @@ PLEX_TOKEN='super-scecret-token'
    ```bash
    python main.py
    ```
+
+### Command-Line Options
+
+The command line options will override the setting on `config.yml`, useful to do a customized run.
+
+If a flag is not provided, the script will use the value from the config file for that option, if available.
+
+#### Connection Options
+
+| Flag            | Description                                                 |
+|-----------------|-------------------------------------------------------------|
+| `--url`, `-u`   | Plex server base URL (e.g. `http://localhost:32400`)        |
+| `--token`       | Plex token (required for authentication)                    |
+
+#### Target Selection
+
+| Flag              | Description                                                            |
+|-------------------|------------------------------------------------------------------------|
+| `--library`, `-l` | One or more library names to process (e.g. Movies, TV Shows). If a library name contains spaces, wrap it in quotes (e.g. "TV Shows").        |
+| `--title`, `-t`   | One or more specific media titles to process. The script does not perform a search—it scans each item in the library and processes it if the title matches one in the provided list. If a title contains spaces, wrap it in quotes (e.g. "Some Movie").                           |
+
+####  Export Settings
+
+| Flag                | Description                                                   |
+|---------------------|---------------------------------------------------------------|
+| `--nfo-name-type`   | Naming style for NFO files: `default`, `title`, or `filename` |
+| `--image-name-type` | Naming style for images: `default`, `title`, or `filename`    |
+
+#### Export Toggles
+
+Each export option has a pair of flags — one to enable, one to disable.
+
+| Enable Flag                  | Disable Flag                 | Description                          |
+|-----------------------------|------------------------------|--------------------------------------|
+| `--export-nfo`              | `--no-export-nfo`            | Export NFO files                     |
+| `--export-poster`           | `--no-export-poster`         | Export posters                       |
+| `--export-fanart`           | `--no-export-fanart`         | Export fanart                        |
+| `--export-season-poster`    | `--no-export-season-poster`  | Export season-level posters          |
+| `--export-episode-nfo`      | `--no-export-episode-nfo`    | Export episode-level NFO files       |
+
+#### Other Options
+
+| Flag         | Description                                  |
+|--------------|----------------------------------------------|
+| `--dry-run`  | Simulate actions without writing any files   |
    
 ## Features and Limitations
 
