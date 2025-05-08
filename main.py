@@ -249,92 +249,66 @@ def write_nfo(config:dict, nfo_path:str, library_type:str, meta_root:str, media_
             nfo.write('<?xml version="1.0" encoding="UTF-8"?>\n')
             nfo.write(f'<{library_type} xsi="http://www.w3.org/2001/XMLSchema-instance" xsd="http://www.w3.org/2001/XMLSchema">\n')
                 
-            if config['agent_id'] and meta_root.get('guid'):
-                guid = meta_root.get('guid')
+            guid = meta_root.get('guid')
+            if config['agent_id'] and guid:
                 if 'themoviedb' in guid:
-                    nfo.write(f'  <tmdbid>{guid[guid.rfind("//")+2:(guid.rfind("?") if "?" in guid else len(guid))]}</tmdbid>\n')
+                    nfo.write(f'  <tmdbid>{guid.split("//")[-1].split("?")[0]}</tmdbid>\n')
 
                 if 'agents.hama' in guid:
-                    nfo.write(f'  <{guid[guid.rfind("//")+2:guid.rfind("-")]}id>{guid[guid.rfind("-")+1:(guid.rfind("?") if "?" in guid else len(guid))]}</{guid[guid.rfind("//")+2:guid.rfind("-")]}id>\n')
+                    prefix = guid.split("//")[-1].split("-")[0]
+                    id_part = guid.split("-")[-1].split("?")[0]
+                    nfo.write(f'  <{prefix}id>{id_part}</{prefix}id>\n')
 
                 for agent in meta_root.findall('Guid'):
-                    agent_name = agent.get('id')[:agent.get('id').rfind(':')]+'id'
-                    agent_id = agent.get('id')[agent.get('id').find('//')+2:]
-                    nfo.write(f'  <{agent_name}>{agent_id}</{agent_name}>\n')
+                    aid = agent.get('id', '')
+                    tag = aid.split(':')[0] + 'id'
+                    value = aid.split('//')[-1]
+                    nfo.write(f'  <{tag}>{value}</{tag}>\n')
                                                     
-            if config['studio'] and meta_root.get('studio'):
-                nfo.write(f'  <studio>{meta_root.get("studio")}</studio>\n')
+            simple_tags = {
+                'studio': 'studio',
+                'title': 'title',
+                'mpaa': 'contentRating',
+                'plot': 'summary',
+                'criticrating': 'rating',
+                'customrating': 'userRating',
+                'year': 'year',
+                'tagline': 'tagline',
+                'runtime': 'duration',
+                'releasedate': 'originallyAvailableAt',
+            }
 
-            if config['title'] and meta_root.get('title'):
-                nfo.write(f'  <title>{meta_root.get("title")}</title>\n')
-                                                    
-            if config['mpaa'] and meta_root.get('contentRating'):
-                nfo.write(f'  <mpaa>{meta_root.get("contentRating")}</mpaa>\n')
-                                                    
-            if config['plot'] and meta_root.get('summary'):
-                nfo.write(f'  <plot>{meta_root.get("summary")}</plot>\n')
-                                                    
-            if config['criticrating'] and meta_root.get('rating'):
-                nfo.write(f'  <criticrating>{meta_root.get("rating")}</criticrating>\n')
-                                                    
-            if config['customrating'] and meta_root.get('userRating'):
-                nfo.write(f'  <customrating>{meta_root.get("userRating")}</customrating>\n')
-                                                    
-            if config['year'] and meta_root.get('year'):
-                nfo.write(f'  <year>{meta_root.get("year")}</year>\n')
-                                                    
-            if config['tagline'] and meta_root.get('tagline'):
-                nfo.write(f'  <tagline>{meta_root.get("tagline")}</tagline>\n')
-                                                
-            if config['runtime'] and meta_root.get('duration'):
-                nfo.write(f'  <runtime>{meta_root.get("duration")}</runtime>\n')
-                                                
-            if config['releasedate'] and meta_root.get('originallyAvailableAt'):
-                nfo.write(f'  <releasedate>{meta_root.get("originallyAvailableAt")}</releasedate>\n')
+            for cfg_key, xml_attr in simple_tags.items():
+                value = meta_root.get(xml_attr)
+                if config[cfg_key] and value:
+                    nfo.write(f'  <{cfg_key}>{value}</{cfg_key}>\n')
 
-            if config['genre'] and meta_root.findall('Genre'):
-                for genre in meta_root.findall('Genre'):
-                    nfo.write(f'  <genre>{genre.get("tag")}</genre>\n')
+            for tag in ['genre', 'country', 'style']:
+                if config[tag]:
+                    for elem in meta_root.findall(tag.capitalize()):
+                        nfo.write(f'  <{tag}>{elem.get("tag")}</{tag}>\n')
 
-            if config['country'] and meta_root.findall('Country'):
-                for country in meta_root.findall('Country'):
-                    nfo.write(f'  <country>{country.get("tag")}</country>\n')
+            if config['ratings']:
+                ratings = meta_root.findall('Rating')
+                if ratings:
+                    nfo.write('  <ratings>\n')
+                    for rating in ratings:
+                        rtype = rating.get("type")
+                        rvalue = rating.get("value")
+                        nfo.write(f'    <{rtype}>{rvalue}</{rtype}>\n')
+                    nfo.write('  </ratings>\n')
 
-            if config['style'] and meta_root.findall('Style'):
-                for style in meta_root.findall('Style'):
-                    nfo.write(f'  <style>{style.get("tag")}</style>\n')
-
-            if config['ratings'] and meta_root.findall('Rating'):
-                nfo.write('  <ratings>\n')
-                for rating in meta_root.findall('Rating'):
-                    nfo.write(f'    <{rating.get("type")}>{rating.get("value")}</{rating.get("type")}>\n')
-                nfo.write('  </ratings>\n')
-
-            if config['directors'] and meta_root.findall('Director'):
-                for director in meta_root.findall('Director'):
-                    tags = '  <director'
-                    if director.get("thumb"):
-                        tags += f' thumb="{director.get("thumb")}"'
-                    tags += f'>{director.get("tag")}</director>\n'
-                    nfo.write(tags)
-
-            if config['writers'] and meta_root.findall('Writer'):
-                for writer in meta_root.findall('Writer'):
-                    tags = '  <writer'
-                    if writer.get("thumb"):
-                        tags += f' thumb="{writer.get("thumb")}"'
-                    tags += f'>{writer.get("tag")}</writer>\n'
-                    nfo.write(tags)
-
-            if config['roles'] and meta_root.findall('Role'):
-                for role in meta_root.findall('Role'):
-                    tags = '  <actor'
-                    if role.get("thumb"):
-                        tags += f' thumb="{role.get("thumb")}"'
-                    if role.get("role"):
-                        tags += f' role="{role.get("role")}"'
-                    tags += f'>{role.get("tag")}</actor>\n'
-                    nfo.write(tags)
+            for tag, xml_tag, extra_attrs in [
+                ('director', 'Director', ['thumb']),
+                ('writer', 'Writer', ['thumb']),
+                ('actor', 'Role', ['thumb', 'role']),
+            ]:
+                if config[tag + 's']:
+                    for person in meta_root.findall(xml_tag):
+                        attrs = ''.join(
+                            f' {attr}="{person.get(attr)}"' for attr in extra_attrs if person.get(attr)
+                        )
+                        nfo.write(f'  <{tag}{attrs}>{person.get("tag")}</{tag}>\n')
 
             nfo.write(f'</{library_type}>')
 
@@ -351,6 +325,7 @@ def write_episode_nfo(episode_nfo_path, episode_root, media_title):
 
             if episode_root.findall('Guid'):
                 for guid in episode_root.findall('Guid'):
+                    gid = guid.get("id")
                     if 'imdb' in guid.get('id'):
                         utype = 'imdb'
                     elif 'tmdb' in guid.get('id'):
@@ -358,28 +333,22 @@ def write_episode_nfo(episode_nfo_path, episode_root, media_title):
                     elif 'tvdb' in guid.get('id'):
                         utype = 'tvdb'
                                             
-                    nfo.write(f'  <uniqueid type="{utype}">{guid.get("id")[guid.get("id").rfind("/")+1:]}</uniqueid>\n')
+                    nfo.write(f'  <uniqueid type="{utype}">{gid.rsplit("/", 1)[-1]}</uniqueid>\n')
 
-            if episode_root.get('parentIndex'):
-                nfo.write(f'  <season>{episode_root.get("parentIndex")}</season>\n')
+            fields = {
+                'parentIndex': 'season',
+                'index': 'episode',
+                'title': 'title',
+                'summary': 'plot',
+                'contentRating': 'mpaa',
+                'rating': 'userrating',
+                'originallyAvailableAt': 'aired',
+            }
 
-            if episode_root.get('index'):
-                nfo.write(f'  <episode>{episode_root.get("index")}</episode>\n')
-
-            if episode_root.get('title'):
-                nfo.write(f'  <title>{episode_root.get("title")}</title>\n')
-
-            if episode_root.get('summary'):
-                nfo.write(f'  <plot>{episode_root.get("summary")}</plot>\n')
-
-            if episode_root.get('contentRating'):
-                nfo.write(f'  <mpaa>{episode_root.get("contentRating")}</mpaa>\n')
-
-            if episode_root.get('rating'):
-                nfo.write(f'  <userrating>{episode_root.get("rating")}</userrating>\n')
-
-            if episode_root.get('originallyAvailableAt'):
-                nfo.write(f'  <aired>{episode_root.get("originallyAvailableAt")}</aired>\n')
+            for attr, tag in fields.items():
+                value = episode_root.get(attr)
+                if value:
+                    nfo.write(f'  <{tag}>{value}</{tag}>\n')
 
             nfo.write('</episodedetails>')
 
@@ -389,13 +358,23 @@ def write_episode_nfo(episode_nfo_path, episode_root, media_title):
         logger.error(f'[FAILURE] Failed to write episode NFO for {media_title} due to {e}')
 
 def sanitize_filename(filename):
-    filename = filename.replace(": ", " - ").replace(":", "-").replace("/", "-").replace("\\", "-")
-    filename = filename.replace("*", "-").replace("?", "").replace('"', "")
-    filename = filename.replace("<", "-").replace(">", "-").replace("|", "-")
-    filename = filename.rstrip('.')
+    filename = filename.replace(": ", " - ")
+    filename = filename.translate(str.maketrans({
+        ":": "-"
+        , "/": "-"
+        , "\\": "-"
+        , "*": "-"
+        , "?": ""
+        , '"': ""
+        , "<": "-"
+        , ">": "-"
+        , "|": "-"
+    })).rstrip('.')
     return filename
 
 def main(args):
+    dry_run = args.dry_run or os.getenv("DRY_RUN")
+
     logger.debug('Entering main...')
 
     if os.path.exists('/app/config/.env'):
@@ -442,20 +421,20 @@ def main(args):
     check_music = 0
 
     logger.debug('Reading library...')
+    type_map = {
+        'movie': ('movie', 'Video'),
+        'show': ('tvshow', 'Directory'),
+    }
+
     for library in library_details:
-        if library.get('type') == 'movie':
-            library_type = 'movie'
-            library_root = 'Video'
-        elif library.get('type') == 'show':
-            library_type = 'tvshow'
-            library_root = 'Directory'
-        elif library.get('type') and check_music == 0:
-            library_type = 'artist'
-            library_root = 'Directory'
+        lib_type = library.get('type')
+        if lib_type in type_map:
+            library_type, library_root = type_map[lib_type]
+        elif lib_type and check_music == 0:
+            library_type, library_root = 'artist', 'Directory'
             check_music += 1
         elif check_music == 1:
-            library_type = 'albums'
-            library_root = 'Directory'
+            library_type, library_root = 'albums', 'Directory'
             check_music -= 1
 
         if check_music == 0:
@@ -518,15 +497,21 @@ def main(args):
                 if args.title:
                     if media_title not in args.title:
                         continue
-                
-                if library_type == 'movie':
-                    file_title = meta_root.find('Media').find('Part').get('file')
                     
                 if library_type == 'movie':
-                    media_path = meta_root.find('Media').find('Part').get('file')
-                    media_path = media_path[:media_path.rfind("/")]+"/"
+                    file_title = meta_root.find('Media/Part').get('file')
+                    media_path = file_title[:file_title.rfind("/")]+"/"
                     for path_list in path_mapping:
                         media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
+                # if library_type == 'movie':
+                #     media_path_parts = meta_root.findall('.//Part')
+                #     media_paths = []
+                #     for media_part in media_path_parts:
+                #         media_paths.append(media_part.get('file'))
+                #     media_path_clean = [path_member[:path_member.rfind("/")]+"/" for path_member in media_paths]
+                #     media_path_clean = set(media_path_clean)
+                #     for path_list in path_mapping:
+                #         media_path_final = [media_clean.replace(path_list.get('plex'), path_list.get('local')) for media_clean in media_path_clean]
                 elif library_type == 'tvshow':
                     media_path = meta_root.find('Location').get('path')+'/'
                     for path_list in path_mapping:
@@ -538,18 +523,18 @@ def main(args):
                 elif library_type == 'albums':
                     track_url = urljoin(meta_url, '/children')
                     track_response = requests.get(track_url, headers=headers)
-                    track0_path = ET.fromstring(track_response.content).findall('Track')[0].find('Media').find('Part').get('file')
+                    track0_path = ET.fromstring(track_response.content).findall('Track')[0].find('Media/Part').get('file')
                     media_path = track0_path[:track0_path.rfind('/')]+'/'
                     for path_list in path_mapping:
                         media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
 
                 try:
-                    movie_filename_type = args.nfo_name_type.lower() or config.get('Movie NFO name type', 'default').lower()
+                    movie_filename_type = args.nfo_name_type.lower() if args.nfo_name_type.lower() is not None else config.get('Movie NFO name type', 'default').lower()
                 except Exception:
                     movie_filename_type = 'default'
 
                 try:
-                    image_filename_type = args.image_name_type.lower() or config.get('Movie Poster/art name type').lower()
+                    image_filename_type = args.image_name_type.lower() if args.image_name_type.lower() is not None else config.get('Movie Poster/art name type').lower()
                 except Exception:
                     image_filename_type = 'default'
                 
@@ -557,21 +542,28 @@ def main(args):
                     nfo_path = os.path.join(media_path, 'artist.nfo')
                 elif library_type == 'albums':
                     nfo_path = os.path.join(media_path, 'album.nfo')
-                elif library_type == 'movie' and movie_filename_type == 'title':
-                    sanitized_title = sanitize_filename(media_title)
-                    nfo_path = os.path.join(media_path, f'{sanitized_title}.nfo')
-                elif library_type == 'movie' and movie_filename_type == 'filename':
-                    file_name = file_title[file_title.rfind('/')+1:file_title.rfind('.')]
-                    nfo_path = os.path.join(media_path, f'{file_name}.nfo')
+                elif library_type == 'movie':
+                    if movie_filename_type == 'title':
+                        sanitized_title = sanitize_filename(media_title)
+                        nfo_path = os.path.join(media_path, f'{sanitized_title}.nfo')
+                    elif movie_filename_type == 'filename':
+                        file_name = file_title[file_title.rfind('/')+1:file_title.rfind('.')]
+                        nfo_path = os.path.join(media_path, f'{file_name}.nfo')
+                    else:
+                        nfo_path = os.path.join(media_path, 'movie.nfo')
                 else:
                     nfo_path = os.path.join(media_path, f'{library_type}.nfo')
 
-                if library_type == 'movie' and image_filename_type == 'title':
-                    poster_path = os.path.join(media_path, f'{sanitized_title}_poster.jpg')
-                    fanart_path = os.path.join(media_path, f'{sanitized_title}_fanart.jpg')
-                elif library_type == 'movie' and image_filename_type == 'filename':
-                    poster_path = os.path.join(media_path, f'{file_name}_poster.jpg')
-                    fanart_path = os.path.join(media_path, f'{file_name}_fanart.jpg')
+                if library_type == 'movie':
+                    if image_filename_type == 'title':
+                        poster_path = os.path.join(media_path, f'{sanitized_title}_poster.jpg')
+                        fanart_path = os.path.join(media_path, f'{sanitized_title}_fanart.jpg')
+                    elif image_filename_type == 'filename':
+                        poster_path = os.path.join(media_path, f'{file_name}_poster.jpg')
+                        fanart_path = os.path.join(media_path, f'{file_name}_fanart.jpg')
+                    else:
+                        poster_path = os.path.join(media_path, 'poster.jpg')
+                        fanart_path = os.path.join(media_path, 'fanart.jpg')
                 else:
                     poster_path = os.path.join(media_path, 'poster.jpg')
                     fanart_path = os.path.join(media_path, 'fanart.jpg')
@@ -583,108 +575,82 @@ def main(args):
                 export_season_poster = args.export_season_poster if args.export_season_poster is not None else config.get('Export season poster', False)
 
                 if export_nfo:
-                    if args.dry_run or os.getenv("DRY_RUN"):
-                        if os.path.exists(nfo_path):
-                            logger.info(f'[DRY RUN] NFO file for {media_title} will be checked and rewritten if older than last updated metadata')
-                        else:
-                            logger.info(f'[DRY RUN] NFO for {media_title} will be saved to {nfo_path}')
+                    file_exists = os.path.exists(nfo_path)
 
+                    if dry_run:
+                        status = 'checked and rewritten' if file_exists else f'saved to {nfo_path}'
+                        logger.info(f'[DRY RUN] NFO for {media_title} will be {status}')
                     else:
                         try:
-                            if os.path.exists(nfo_path):                                
+                            if file_exists:
                                 file_mod_time = int(os.path.getmtime(nfo_path))
                                 server_mod_time = int(meta_root.get('updatedAt'))
-                                time_difference = file_mod_time - server_mod_time
-
-                                if time_difference < 0:
+                                if file_mod_time < server_mod_time:
                                     write_nfo(config, nfo_path, library_type, meta_root, media_title)
                                 else:
                                     logger.info(f'[SKIPPED] NFO for {media_title} skipped because NFO file is not older than last updated metadata')
-
                             else:
                                 write_nfo(config, nfo_path, library_type, meta_root, media_title)
                         except Exception as e:
                             logger.error(f'[FAILURE] Failed to write NFO for {media_title} due to {e}')
 
-                if export_episode_nfo and (library_type == 'tvshow'):
-                    if args.dry_run or os.getenv("DRY_RUN"):
-                        if os.path.exists(episode_path):
-                            logger.info(f'[DRY RUN] Episode NFO file for {media_title} will be checked and rewritten if older than last updated metadata')
-                        else:
-                            logger.info(f'[DRY RUN] Episode NFO for {media_title} will be saved')
+                if export_episode_nfo and library_type == 'tvshow':
+                    try:
+                        meta_season_url = urljoin(meta_url + '/', 'children')
+                        season_resp = requests.get(meta_season_url, headers=headers)
 
-                    else:
-                        try:
-                            meta_season = urljoin(meta_url + '/', 'children')
-                            meta_season_response = requests.get(meta_season, headers=headers)
-                            if meta_season_response.status_code == 200:
-                                meta_season_root = ET.fromstring(meta_season_response.content).findall('Directory')
+                        if season_resp.status_code == 200:
+                            for season in ET.fromstring(season_resp.content).findall('Directory'):
+                                season_key = season.get('ratingKey')
+                                episodes_url = urljoin(meta_url[:meta_url.rfind('/')] + '/', f'{season_key}/children')
+                                episodes_resp = requests.get(episodes_url, headers=headers)
 
-                                for season in meta_season_root:
-                                    season_key = season.get('ratingKey')
+                                if episodes_resp.status_code == 200:
+                                    for episode in ET.fromstring(episodes_resp.content).findall('Video'):
+                                        episode_key = episode.get('ratingKey')
+                                        episode_url = urljoin(meta_url[:meta_url.rfind('/')] + '/', episode_key)
+                                        episode_data = requests.get(episode_url, headers=headers)
+                                        episode_root = ET.fromstring(episode_data.content).find('Video')
 
-                                    season_url = urljoin(meta_url[:meta_url.rfind('/')] + '/', f'{season_key}/children')
-                                    season_url_response = requests.get(season_url, headers=headers)
-                                    if season_url_response.status_code == 200:
-                                        season_root = ET.fromstring(season_url_response.content).findall('Video')
+                                        episode_path = episode_root.find('Media/Part').get('file')
+                                        episode_nfo_path = episode_path[:episode_path.rfind('.')] + '.nfo'
+                                        for path in path_mapping:
+                                            episode_nfo_path = episode_nfo_path.replace(path['plex'], path['local'])
 
-                                        for episode in season_root:
-                                            episode_key = episode.get('ratingKey')
-
-                                            episode_url = urljoin(meta_url[:meta_url.rfind('/')] + '/', episode_key)
-                                            episode_url_response = requests.get(episode_url, headers=headers)
-                                            episode_root = ET.fromstring(episode_url_response.content).find('Video')
-
-                                            episode_path = episode_root.find('Media').find('Part').get('file')
-                                            episode_nfo_path = episode_path[:episode_path.rfind('.')] + '.nfo'
-
-                                            for path_list in path_mapping:
-                                                episode_nfo_path = episode_nfo_path.replace(path_list.get('plex'), path_list.get('local'))
-
-                                            if os.path.exists(episode_nfo_path):
-                                                file_mod_time = int(os.path.getmtime(episode_nfo_path))
-                                                server_mod_time = int(meta_root.get('updatedAt'))
-                                                time_difference = file_mod_time - server_mod_time
-
-                                                if time_difference < 0:
-                                                    if args.dry_run or os.getenv("DRY_RUN"):
-                                                        logger.info(f'[DRY RUN] Will rewrite episode NFO for {media_title}')
-                                                    else:
-                                                        write_episode_nfo(episode_nfo_path, episode_root, media_title)
+                                        file_exists = os.path.exists(episode_nfo_path)
+                                        if dry_run:
+                                            status = 'checked and rewritten' if file_exists else f'saved to {episode_path}'
+                                            logger.info(f'[DRY RUN] Episode NFO for {media_title} will be {status}')
+                                        else:
+                                            if file_exists:
+                                                file_time = int(os.path.getmtime(episode_nfo_path))
+                                                server_time = int(meta_root.get('updatedAt'))
+                                                if file_time < server_time:
+                                                    write_episode_nfo(episode_nfo_path, episode_root, media_title)
                                                 else:
-                                                    if args.dry_run or os.getenv("DRY_RUN"):
-                                                        logger.info(f'[SKIPPED] Episode NFO for {media_title} will be skipped because NFO file is not older than last updated metadata')
-                                                    else:
-                                                        logger.info(f'[SKIPPED] Episode NFO for {media_title} skipped because NFO file is not older than last updated metadata')
-
+                                                    logger.info(f'[SKIPPED] Episode NFO for {media_title} skipped (not older)')
                                             else:
                                                 write_episode_nfo(episode_nfo_path, episode_root, media_title)
-
-                        except Exception as e:
-                            logger.error(f'[FAILURE] Failed to write episodic NFO for {media_title} due to {e}')
+                    except Exception as e:
+                        logger.error(f'[FAILURE] Failed to write episodic NFO for {media_title} due to {e}')
 
                 if export_poster:
-                    if args.dry_run or os.getenv("DRY_RUN"):
-                        if os.path.exists(poster_path):
-                            logger.info(f'[DRY RUN] Poster for {media_title} will be checked and rewritten if older than last updated metadata')
+                    try:
+                        url = urljoin(baseurl, meta_root.get('thumb'))
+                        file_exists = os.path.exists(poster_path)
+                        if dry_run:
+                            status = 'checked and rewritten' if file_exists else f'saved to {poster_path}'
+                            logger.info(f'[DRY RUN] Poster for {media_title} will be {status}')
                         else:
-                            logger.info(f'[DRY RUN] Poster for {media_title} will be saved to {poster_path}')
-
-                    else:
-                        try:
-                            url = urljoin(baseurl, meta_root.get('thumb'))
-                            if os.path.exists(poster_path):
+                            if file_exists:
                                 file_mod_time = int(os.path.getmtime(poster_path))
                                 server_mod_time = int(meta_root.get('updatedAt'))
-                                time_difference = file_mod_time - server_mod_time
-                                                    
-                                if time_difference < 0:
+                                if file_mod_time < server_mod_time:
                                     try:
                                         download_image(url, headers, poster_path)
                                         logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
                                     except Exception as e:
                                         logger.info(f'[FAILURE] Failed to save poster for {media_title} due to: {e}')
-
                                 else:
                                     logger.info(f'[SKIPPED] Poster for {media_title} skipped because poster file is not older than last updated metadata')
                             else:
@@ -693,92 +659,80 @@ def main(args):
                                     logger.info(f'[SUCCESS] Poster for {media_title} successfully saved to {poster_path}')
                                 except Exception as e:
                                     logger.info(f'[FAILURE] Failed to save poster for {media_title} due to: {e}')
-                        except:
-                            logger.info(f'[FAILURE] Poster for {media_title} not found')
+                    except Exception:
+                        logger.info(f'[FAILURE] Poster for {media_title} not found')
 
                 if export_fanart:
-                    if args.dry_run or os.getenv("DRY_RUN"):
-                        if os.path.exists(poster_path):
-                            logger.info(f'[DRY RUN] Fanart for {media_title} will be checked and rewritten if older than last updated metadata')
+                    try:
+                        url = urljoin(baseurl, meta_root.get('art'))
+                        file_exists = os.path.exists(fanart_path)
+                        if dry_run:
+                            status = 'checked and rewritten' if file_exists else f'saved to {fanart_path}'
+                            logger.info(f'[DRY RUN] Fanart for {media_title} will be {status}')
                         else:
-                            logger.info(f'[DRY RUN] Fanart for {media_title} will be saved to {fanart_path}')
-
-                    else:
-                        try:
-                            url = urljoin(baseurl, meta_root.get('art'))
-                            if os.path.exists(fanart_path):
-                                file_mod_time = int(os.path.getmtime(poster_path))
+                            if file_exists:
+                                file_mod_time = int(os.path.getmtime(fanart_path))
                                 server_mod_time = int(meta_root.get('updatedAt'))
-                                time_difference = file_mod_time - server_mod_time
-                                                    
-                                if time_difference < 0:
+                                if file_mod_time < server_mod_time:
                                     try:
                                         download_image(url, headers, fanart_path)
                                         logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
                                     except Exception as e:
                                         logger.info(f'[FAILURE] Failed to save art for {media_title} due to: {e}')
-
                                 else:
-                                    logger.info(f'[SKIPPED] Art for {media_title} skipped because fanart file is not older than last updated metadata')
+                                    logger.info(f'[SKIPPED] Fanart for {media_title} skipped because fanart file is not older than last updated metadata')
                             else:
                                 try:
                                     download_image(url, headers, fanart_path)
                                     logger.info(f'[SUCCESS] Art for {media_title} successfully saved to {fanart_path}')
                                 except Exception as e:
                                     logger.info(f'[FAILURE] Failed to save art for {media_title} due to: {e}')
-                        except:
-                            logger.info(f'[FAILURE] Art for {media_title} not found')
+                    except Exception:
+                        logger.info(f'[FAILURE] Art for {media_title} not found')
 
                 if export_season_poster and library_type == 'tvshow':
-                    if args.dry_run or os.getenv("DRY_RUN"):
-                        if os.path.exists(poster_path):
-                            logger.info(f'[DRY RUN] Season poster for {media_title} will be checked and rewritten if older than last updated metadata')
-                        else:
-                            logger.info(f'[DRY RUN] Season poster for {media_title} will be saved')
+                    try:
+                        season_url = urljoin(f'{meta_url}/', 'children')
+                        season_response = requests.get(season_url, headers=headers)
+                        
+                        if season_response.status_code == 200:
+                            season_root = ET.fromstring(season_response.content).findall('Directory')
+                            for season_dir in season_root:
+                                if not season_dir.get('title') or season_dir.get('title') == 'All episodes':
+                                    continue
 
-                    else:
-                        try:
-                            season_url = urljoin(f'{meta_url}/', 'children')
-                            season_response = requests.get(season_url, headers=headers)
-                            if season_response.status_code == 200:
-                                season_root = ET.fromstring(season_response.content).findall('Directory')
-                                for season_dir in season_root:
-                                    if not season_dir.get('title') or season_dir.get('title') == 'All episodes':
-                                        continue
+                                season_title = season_dir.get('title').lower().replace(' ', '')
+                                season_path = os.path.join(media_path, f'{season_title}-cover.jpg' if season_title != 'specials' and season_title != 'miniseries' else f"season1-cover.jpg")
+                                
+                                if season_title == 'specials':
+                                    season_path = os.path.join(media_path, f'season-{season_title}-cover.jpg')
 
-                                    season_title = season_dir.get('title').lower().replace(' ', '')
-                                    if season_title == 'Specials':
-                                        season_path = os.path.join(media_path, f'season-{season_title}-cover.jpg')
-                                    elif season_title == 'Miniseries':
-                                        season_path = os.path.join(media_path, f"season1-cover.jpg")
-                                    else:
-                                        season_path = os.path.join(media_path, f"{season_title}-cover.jpg")
-                                    
-                                    url = urljoin(baseurl, season_dir.get('thumb'))
-                                    if os.path.exists(season_path):
+                                url = urljoin(baseurl, season_dir.get('thumb'))
+                                file_exists = os.path.exists(season_path)
+
+                                if dry_run:
+                                    status = 'checked and rewritten' if file_exists else f'saved to {season_path}'
+                                    logger.info(f'[DRY RUN] Season poster for {media_title} will be {status}')
+                                else:
+                                    if file_exists:
                                         file_mod_time = int(os.path.getmtime(season_path))
                                         server_mod_time = int(meta_root.get('updatedAt'))
-                                        time_difference = file_mod_time - server_mod_time
-
-                                        if time_difference < 0:
+                                        if file_mod_time < server_mod_time:
                                             try:
                                                 download_image(url, headers, season_path)
                                                 logger.info(f'[SUCCESS] {season_title} poster for {media_title} successfully saved to {season_path}')
                                             except Exception as e:
                                                 logger.info(f'[FAILURE] Failed to save {season_title} poster for {media_title} due to: {e}')
-
                                         else:
-                                            logger.info(f'[SKIPPED] {season_title} poster skipped because fanart file is not older than last updated metadata')
-
+                                            logger.info(f'[SKIPPED] {season_title} poster skipped because file is not older than last updated metadata')
                                     else:
                                         try:
                                             download_image(url, headers, season_path)
                                             logger.info(f'[SUCCESS] {season_title} poster for {media_title} successfully saved to {season_path}')
                                         except Exception as e:
                                             logger.info(f'[FAILURE] Failed to save {season_title} poster for {media_title} due to: {e}')
-
-                        except:
-                            logger.info(f'[FAILURE] Season poster for {media_title} not found')
+                    except Exception:
+                        logger.info(f'[FAILURE] Season poster for {media_title} not found')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Export metadata and poster/art from plex to NFO and image files.")
@@ -787,22 +741,22 @@ if __name__ == '__main__':
     parser.add_argument("--library", "-l", nargs='+', help="Library name(s) to process.")
     parser.add_argument("--title", "-t", nargs='+', help="Media title(s) to process.")
 
-    parser.add_argument("--nfo-name-type", choices=["default", "title", "filename"], default="default")
-    parser.add_argument("--image-name-type", choices=["default", "title", "filename"], default="default")
+    parser.add_argument("--nfo-name-type", choices=["default", "title", "filename"], default=None)
+    parser.add_argument("--image-name-type", choices=["default", "title", "filename"], default=None)
 
-    parser.add_argument("--export-nfo", dest="export_nfo", action="store_true", help="Export NFO files")
+    parser.add_argument("--export-nfo", dest="export_nfo", action="store_true", help="Export NFO files", default=None)
     parser.add_argument("--no-export-nfo", dest="export_nfo", action="store_false", help="Do not export NFO files")
 
-    parser.add_argument("--export-poster", dest="export_poster", action="store_true", help="Export posters")
+    parser.add_argument("--export-poster", dest="export_poster", action="store_true", help="Export posters", default=None)
     parser.add_argument("--no-export-poster", dest="export_poster", action="store_false")
 
-    parser.add_argument("--export-fanart", dest="export_fanart", action="store_true", help="Export fanarts")
+    parser.add_argument("--export-fanart", dest="export_fanart", action="store_true", help="Export fanarts", default=None)
     parser.add_argument("--no-export-fanart", dest="export_fanart", action="store_false")
 
-    parser.add_argument("--export-season-poster", dest="export_season_poster", action="store_true", help="Export season poster")
+    parser.add_argument("--export-season-poster", dest="export_season_poster", action="store_true", help="Export season poster", default=None)
     parser.add_argument("--no-export-season-poster", dest="export_season_poster", action="store_false")
 
-    parser.add_argument("--export-episode-nfo", dest="export_episode_nfo", action="store_true", help="Export episode NFO files")
+    parser.add_argument("--export-episode-nfo", dest="export_episode_nfo", action="store_true", help="Export episode NFO files", default=None)
     parser.add_argument("--no-export-episode-nfo", dest="export_episode_nfo", action="store_false")
 
     parser.add_argument("--dry-run", action="store_true", help="Simulate actions without making any changes")
