@@ -337,6 +337,11 @@ def write_nfo(config:dict, nfo_path:str, library_type:str, meta_root:str, media_
 
     except Exception as e:
         logger.error(f'[FAILURE] Failed to write NFO for {media_title} due to {e}')
+        if os.path.exists(nfo_path):
+            try:
+                os.remove(nfo_path)
+            except Exception as rm_err:
+                logger.error(f'[CLEANUP] Failed to remove incomplete NFO at {nfo_path}: {rm_err}')
 
 def write_episode_nfo(episode_nfo_path, episode_root, media_title):
     try:
