@@ -257,50 +257,79 @@ def write_nfo(config:dict, nfo_path:str, library_type:str, meta_root:str, media_
                     value = aid.split('//')[-1]
                     nfo.write(f'  <{tag}>{value}</{tag}>\n')
                                                     
-            simple_tags = {
-                'studio': 'studio',
-                'title': 'title',
-                'mpaa': 'contentRating',
-                'plot': 'summary',
-                'criticrating': 'rating',
-                'customrating': 'userRating',
-                'year': 'year',
-                'tagline': 'tagline',
-                'runtime': 'duration',
-                'releasedate': 'originallyAvailableAt',
-            }
+            if config['studio'] and meta_root.get('studio'):
+                nfo.write(f'  <studio>{meta_root.get("studio")}</studio>\n')
 
-            for cfg_key, xml_attr in simple_tags.items():
-                value = meta_root.get(xml_attr)
-                if config[cfg_key] and value:
-                    nfo.write(f'  <{cfg_key}>{value}</{cfg_key}>\n')
+            if config['title'] and meta_root.get('title'):
+                nfo.write(f'  <title>{meta_root.get("title")}</title>\n')
+                                                    
+            if config['mpaa'] and meta_root.get('contentRating'):
+                nfo.write(f'  <mpaa>{meta_root.get("contentRating")}</mpaa>\n')
+                                                    
+            if config['plot'] and meta_root.get('summary'):
+                nfo.write(f'  <plot>{meta_root.get("summary")}</plot>\n')
+                                                    
+            if config['criticrating'] and meta_root.get('rating'):
+                nfo.write(f'  <criticrating>{meta_root.get("rating")}</criticrating>\n')
+                                                    
+            if config['customrating'] and meta_root.get('userRating'):
+                nfo.write(f'  <customrating>{meta_root.get("userRating")}</customrating>\n')
+                                                    
+            if config['year'] and meta_root.get('year'):
+                nfo.write(f'  <year>{meta_root.get("year")}</year>\n')
+                                                    
+            if config['tagline'] and meta_root.get('tagline'):
+                nfo.write(f'  <tagline>{meta_root.get("tagline")}</tagline>\n')
+                                                
+            if config['runtime'] and meta_root.get('duration'):
+                nfo.write(f'  <runtime>{meta_root.get("duration")}</runtime>\n')
+                                                
+            if config['releasedate'] and meta_root.get('originallyAvailableAt'):
+                nfo.write(f'  <releasedate>{meta_root.get("originallyAvailableAt")}</releasedate>\n')
 
-            for tag in ['genre', 'country', 'style']:
-                if config[tag]:
-                    for elem in meta_root.findall(tag.capitalize()):
-                        nfo.write(f'  <{tag}>{elem.get("tag")}</{tag}>\n')
+            if config['genre'] and meta_root.findall('Genre'):
+                for genre in meta_root.findall('Genre'):
+                    nfo.write(f'  <genre>{genre.get("tag")}</genre>\n')
 
-            if config['ratings']:
-                ratings = meta_root.findall('Rating')
-                if ratings:
-                    nfo.write('  <ratings>\n')
-                    for rating in ratings:
-                        rtype = rating.get("type")
-                        rvalue = rating.get("value")
-                        nfo.write(f'    <{rtype}>{rvalue}</{rtype}>\n')
-                    nfo.write('  </ratings>\n')
+            if config['country'] and meta_root.findall('Country'):
+                for country in meta_root.findall('Country'):
+                    nfo.write(f'  <country>{country.get("tag")}</country>\n')
 
-            for tag, xml_tag, extra_attrs in [
-                ('director', 'Director', ['thumb']),
-                ('writer', 'Writer', ['thumb']),
-                ('actor', 'Role', ['thumb', 'role']),
-            ]:
-                if config[tag + 's']:
-                    for person in meta_root.findall(xml_tag):
-                        attrs = ''.join(
-                            f' {attr}="{person.get(attr)}"' for attr in extra_attrs if person.get(attr)
-                        )
-                        nfo.write(f'  <{tag}{attrs}>{person.get("tag")}</{tag}>\n')
+            if config['style'] and meta_root.findall('Style'):
+                for style in meta_root.findall('Style'):
+                    nfo.write(f'  <style>{style.get("tag")}</style>\n')
+
+            if config['ratings'] and meta_root.findall('Rating'):
+                nfo.write('  <ratings>\n')
+                for rating in meta_root.findall('Rating'):
+                    nfo.write(f'    <{rating.get("type")}>{rating.get("value")}</{rating.get("type")}>\n')
+                nfo.write('  </ratings>\n')
+
+            if config['directors'] and meta_root.findall('Director'):
+                for director in meta_root.findall('Director'):
+                    tags = '  <director'
+                    if director.get("thumb"):
+                        tags += f' thumb="{director.get("thumb")}"'
+                    tags += f'>{director.get("tag")}</director>\n'
+                    nfo.write(tags)
+
+            if config['writers'] and meta_root.findall('Writer'):
+                for writer in meta_root.findall('Writer'):
+                    tags = '  <writer'
+                    if writer.get("thumb"):
+                        tags += f' thumb="{writer.get("thumb")}"'
+                    tags += f'>{writer.get("tag")}</writer>\n'
+                    nfo.write(tags)
+
+            if config['roles'] and meta_root.findall('Role'):
+                for role in meta_root.findall('Role'):
+                    tags = '  <actor'
+                    if role.get("thumb"):
+                        tags += f' thumb="{role.get("thumb")}"'
+                    if role.get("role"):
+                        tags += f' role="{role.get("role")}"'
+                    tags += f'>{role.get("tag")}</actor>\n'
+                    nfo.write(tags)
 
             nfo.write(f'</{library_type}>')
 
