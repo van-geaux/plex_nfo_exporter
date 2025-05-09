@@ -16,12 +16,6 @@ import sys
 import xml.etree.ElementTree as ET
 import yaml
 
-import os
-import logging
-from pathlib import Path
-from datetime import datetime
-import yaml
-
 if os.path.isdir('/app/config'):
     config_path = '/app/config/config.yml'
 else:
@@ -45,10 +39,10 @@ def set_logger():
         config_content = file.read()
         config = yaml.safe_load(config_content)
 
-    try:
-        log_level_str = config.get('log_level', 'INFO').upper()
-    except:
+    log_level_str = config.get('log_level', 'INFO')
+    if not isinstance(log_level_str, str):
         log_level_str = 'INFO'
+    log_level_str = log_level_str.upper()
 
     log_level_console = getattr(logging, log_level_str, logging.INFO)
     log_level_file = getattr(logging, log_level_str, logging.WARNING)
@@ -72,29 +66,20 @@ def set_logger():
 
     return logger
 
-def ensure_env_file_exists() -> None:
+def ensure_files_exist():
     """
-    Create .env with placeholder if not exist
+    Ensure required .env and config.yml files exist with placeholder content.
     """
-    default_content = "PLEX_URL='http://192.168.1.2:32400'\nPLEX_TOKEN='very-long-token'"
-
-    if os.path.isdir('/app/config'):
-        file_path = '/app/config/.env'
-    else:
-        file_path = '.env'
-
-    if os.getenv("PLEX_URL") and os.getenv("PLEX_TOKEN"):
-        return
-    elif not os.path.exists(file_path):
-        with open(file_path, 'w', encoding='utf-8') as env_file:
-            env_file.write(default_content)
-        print(f"{file_path} created, if you haven't put your Plex's url and token in the config then please put them in the .env then restart the container/rerun the script")
-        sys.exit()
-    else:
-        print(f"{file_path} already exists.")
-
-def ensure_config_file_exists() -> None:
-    default_content = """# config.yml
+    files = [
+        {
+            "path": "/app/config/.env" if os.path.isdir("/app/config") else ".env",
+            "content": "PLEX_URL='http://192.168.1.2:32400'\nPLEX_TOKEN='very-long-token'",
+            "name": ".env",
+            "env_vars": ["PLEX_URL", "PLEX_TOKEN"]
+        },
+        {
+            "path": "/app/config/config.yml" if os.path.isdir("/app/config") else "config.yml",
+            "content": """# config.yml
 
 # change plex url and token here
 # you can ignore this if you are using PLEX_URL and PLEX_TOKEN environment variables in docker
@@ -170,15 +155,22 @@ roles: false
 
 # log level defaults to info for console and warning for file
 log_level: 
-"""
+""",
+            "name": "config.yml"
+        }
+    ]
 
-    if not os.path.exists(config_path):
-        with open(config_path, 'w', encoding='utf-8') as env_file:
-            env_file.write(default_content)
-        print(f"{config_path} created, if you haven't set your config then please put them in the config.yml then restart the container/rerun the script")
-        sys.exit()
-    else:
-        print(f"{config_path} already exists.")
+    for file in files:
+        if file["name"] == ".env":
+            if all(os.getenv(var) for var in file["env_vars"]):
+                continue
+        if not os.path.exists(file["path"]):
+            with open(file["path"], "w", encoding="utf-8") as f:
+                f.write(file["content"])
+            print(f"{file['path']} created. Please populate it and rerun the script.")
+            sys.exit()
+        else:
+            print(f"{file['path']} already exists.")
 
 def env_var_constructor(loader, node):
     """
@@ -763,7 +755,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    ensure_config_file_exists()
-    ensure_env_file_exists()  
+    ensure_files_exist() 
     logger = set_logger()
     main(args)
