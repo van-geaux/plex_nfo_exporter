@@ -2,6 +2,10 @@
 
 **Plex NFO Exporter** is a script that extracts metadata, posters, and background art from Plex and generates compatible files for use with other media servers like Jellyfin.  
 
+By default, only a summary is shown in the terminal (detailed in log file):
+![alt text](image-1.png)
+
+Verbose, shows detailed processes:
 ![alt text](image.png)
 
 ---
@@ -38,6 +42,7 @@ docker run --rm \
   -e PLEX_URL='http://plex_ip:port' \
   -e PLEX_TOKEN='super-secret-token' \
   -e DRY_RUN=false \
+  -e LOG_LEVEL=INFO \
   ghcr.io/van-geaux/plex_nfo_exporter:latest
 ```
 
@@ -63,6 +68,7 @@ services:
       - PLEX_URL='http://plex_ip:port' # optional, you need to set in config.yml otherwise
       - PLEX_TOKEN='super-secret-token' # optional, you need to set in config.yml otherwise
       - DRY_RUN=false # optional, will simulate actions without writing any files
+      - LOG_LEVEL=VERBOSE # optional, if not set default to `INFO`, use `VERBOSE` to print detailed processing instead of only summary
     volumes:
       - /path/to/config:/app/config
       - /path/to/config/logs:/app/logs # optional, you need to create the logs folder if you want to mount it
@@ -159,9 +165,10 @@ Each export option has a pair of flags — one to enable, one to disable.
 
 #### Other Options
 
-| Flag         | Description                                  |
-|--------------|----------------------------------------------|
-| `--dry-run`  | Simulate actions without writing any files   |
+| Flag          | Description                                                                                         |
+|---------------|-----------------------------------------------------------------------------------------------------|
+| `--dry-run`   | Simulate actions without writing any files                                                          |
+| `--log-level` | Set the logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`, or `VERBOSE`). Defaults to `INFO`. Use `VERBOSE` to print detailed processing instead of only summary. |
    
 ## Features and Limitations
 
