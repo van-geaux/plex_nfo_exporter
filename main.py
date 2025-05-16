@@ -954,7 +954,7 @@ if __name__ == '__main__':
     parser.add_argument("--log-level", choices=["DEBUG", "INFO", "WARNING", "CRITICAL", "VERBOSE"], type=str.upper, default=None)
 
     args = parser.parse_args()
-    log_level = args.log_level.upper()
+    log_level = args.log_level
 
     ensure_files_exist() 
     logger = set_logger(log_level)
