@@ -759,7 +759,7 @@ def main(args):
                                     library_result[f'{library.get("name")}']['poster_failure'] += 1
                                 elif dry_run:
                                     status = 'checked and rewritten' if file_exists else f'saved to {poster_path}'
-                                    logger.verbose(f'[DRY RUN] Poster for {media_title} will be {status}')
+                                    logger.info(f'[DRY RUN] Poster for {media_title} will be {status}')
                                 else:
                                     if file_exists:
                                         file_mod_time = int(os.path.getmtime(poster_path))
