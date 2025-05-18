@@ -418,8 +418,11 @@ def sanitize_filename(filename):
     })).rstrip('.')
     return filename
 
+def str_to_bool(value):
+    return str(value).lower() in ("1", "true", "yes", "on")
+
 def main(args):
-    dry_run = args.dry_run or os.getenv("DRY_RUN")
+    dry_run = args.dry_run or str_to_bool(os.getenv("DRY_RUN", "false"))
 
     logger.debug('Entering main...')
 
