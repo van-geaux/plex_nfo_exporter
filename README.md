@@ -42,6 +42,7 @@ docker run --rm \
   -e PLEX_URL='http://plex_ip:port' \
   -e PLEX_TOKEN='super-secret-token' \
   -e DRY_RUN=false \
+  -e FORCE_OVERWRITE=false \
   -e LOG_LEVEL=INFO \
   ghcr.io/van-geaux/plex_nfo_exporter:latest
 ```
@@ -68,6 +69,7 @@ services:
       - PLEX_URL='http://plex_ip:port' # optional, you need to set in config.yml otherwise
       - PLEX_TOKEN='super-secret-token' # optional, you need to set in config.yml otherwise
       - DRY_RUN=false # optional, will simulate actions without writing any files
+      - FORCE_OVERWRITE=false # optional, force overwrite files without checking server metadata; overrides config.yml setting
       - LOG_LEVEL=VERBOSE # optional, if not set default to `INFO`, use `VERBOSE` to print detailed processing instead of only summary
     volumes:
       - /path/to/config:/app/config
@@ -150,6 +152,7 @@ If a flag is not provided, the script will use the value from the config file fo
 |---------------------|---------------------------------------------------------------|
 | `--nfo-name-type`   | Naming style for NFO files: `default`, `title`, or `filename` |
 | `--image-name-type` | Naming style for images: `default`, `title`, or `filename`    |
+| `--force-overwrite`, `-f` | Overwrite files without checking server metadata; overrides config.yml setting. |
 
 #### Export Toggles
 

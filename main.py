@@ -22,6 +22,10 @@ if os.path.isdir('/app/config'):
 else:
     config_path = 'config.yml'
 
+class StoreTrueIfFlagPresent(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, True)
+
 def set_logger(log_level):
     if not os.path.exists('logs'):
         os.makedirs('logs')
@@ -102,11 +106,8 @@ Token: ${PLEX_TOKEN} # how to get token https://support.plex.tv/articles/2040594
 # if the library type is music, input it TWICE CONSECUTIVELY. This is due to plex having 2 different roots for music library, each for artist and albums
 Libraries: ['Movies', 'TV Shows', 'Anime', 'Music', 'Music']
 
-# DEPRECATED, now using file time minus server time, if there is metadata update on the server then everything will be replaced
-# minimum age (days) for NFO/poster/art not to be replaced
-# i.e setting 15 means any NFO/poster/art file older than 15 days will not be replaced
-# !!!!!!! set lower than how often you plan to run the script !!!!!!!
-# days_difference: 4
+# overwrite files without checking if they are up-to-date with server's metadata
+Force overwrite: false
 
 # true/false choose what to export
 Export NFO: true
@@ -477,6 +478,13 @@ def main(args):
 
     library_result = {}
 
+    export_nfo = args.export_nfo if args.export_nfo is not None else config.get('Export NFO', False)
+    export_episode_nfo = args.export_episode_nfo if args.export_episode_nfo is not None else config.get('Export episode NFO', False)
+    export_poster = args.export_poster if args.export_poster is not None else config.get('Export poster', False)
+    export_fanart = args.export_fanart if args.export_fanart is not None else config.get('Export fanart', False)
+    export_season_poster = args.export_season_poster if args.export_season_poster is not None else config.get('Export season poster', False)
+    force_overwrite = True if args.force_overwrite or str_to_bool(os.getenv("FORCE_OVERWRITE", "false")) else config.get('Force overwrite', False)
+
     print('')
     for library in library_details:
         library_result[f'{library.get("name")}'] = {
@@ -662,12 +670,6 @@ def main(args):
                             poster_path = os.path.join(media_path, 'poster.jpg')
                             fanart_path = os.path.join(media_path, 'fanart.jpg')
 
-                        export_nfo = args.export_nfo if args.export_nfo is not None else config.get('Export NFO', False)
-                        export_episode_nfo = args.export_episode_nfo if args.export_episode_nfo is not None else config.get('Export episode NFO', False)
-                        export_poster = args.export_poster if args.export_poster is not None else config.get('Export poster', False)
-                        export_fanart = args.export_fanart if args.export_fanart is not None else config.get('Export fanart', False)
-                        export_season_poster = args.export_season_poster if args.export_season_poster is not None else config.get('Export season poster', False)
-
                         if export_nfo:
                             file_exists = os.path.exists(nfo_path)
 
@@ -677,9 +679,7 @@ def main(args):
                             else:
                                 try:
                                     if file_exists:
-                                        file_mod_time = int(os.path.getmtime(nfo_path))
-                                        server_mod_time = int(meta_root.get('updatedAt'))
-                                        if file_mod_time < server_mod_time:
+                                        if force_overwrite:
                                             nfo_status = write_nfo(config, nfo_path, library_type, meta_root, media_title)
                                             if nfo_status:
                                                 logger.verbose(f'[UPDATED] NFO for {media_title} successfully saved to {nfo_path}')
@@ -687,8 +687,18 @@ def main(args):
                                             else:
                                                 library_result[f'{library.get("name")}']['nfo_failure'] += 1
                                         else:
-                                            logger.verbose(f'[SKIPPED] NFO for {media_title} skipped because NFO file is not older than last updated metadata')
-                                            library_result[f'{library.get("name")}']['nfo_skipped'] += 1
+                                            file_mod_time = int(os.path.getmtime(nfo_path))
+                                            server_mod_time = int(meta_root.get('updatedAt'))
+                                            if file_mod_time < server_mod_time:
+                                                nfo_status = write_nfo(config, nfo_path, library_type, meta_root, media_title)
+                                                if nfo_status:
+                                                    logger.verbose(f'[UPDATED] NFO for {media_title} successfully saved to {nfo_path}')
+                                                    library_result[f'{library.get("name")}']['nfo_updated'] += 1
+                                                else:
+                                                    library_result[f'{library.get("name")}']['nfo_failure'] += 1
+                                            else:
+                                                logger.verbose(f'[SKIPPED] NFO for {media_title} skipped because NFO file is not older than last updated metadata')
+                                                library_result[f'{library.get("name")}']['nfo_skipped'] += 1
                                     else:
                                         nfo_status = write_nfo(config, nfo_path, library_type, meta_root, media_title)
                                         if nfo_status:
@@ -729,9 +739,7 @@ def main(args):
                                                     logger.info(f'[DRY RUN] Episode NFO for {media_title} will be {status}')
                                                 else:
                                                     if file_exists:
-                                                        file_time = int(os.path.getmtime(episode_nfo_path))
-                                                        server_time = int(meta_root.get('updatedAt'))
-                                                        if file_time < server_time:
+                                                        if force_overwrite:
                                                             episode_nfo_status = write_episode_nfo(episode_nfo_path, episode_root, media_title)
                                                             if episode_nfo_status:
                                                                 logger.verbose(f'[UPDATED] NFO for {episode_nfo_path} successfully saved')
@@ -739,8 +747,18 @@ def main(args):
                                                             else:
                                                                 library_result[f'{library.get("name")}']['episode_nfo_failure'] += 1
                                                         else:
-                                                            logger.info(f'[SKIPPED] Episode NFO for {media_title} skipped is not older than last updated metadata')
-                                                            library_result[f'{library.get("name")}']['episode_nfo_skipped'] += 1
+                                                            file_time = int(os.path.getmtime(episode_nfo_path))
+                                                            server_time = int(meta_root.get('updatedAt'))
+                                                            if file_time < server_time:
+                                                                episode_nfo_status = write_episode_nfo(episode_nfo_path, episode_root, media_title)
+                                                                if episode_nfo_status:
+                                                                    logger.verbose(f'[UPDATED] NFO for {episode_nfo_path} successfully saved')
+                                                                    library_result[f'{library.get("name")}']['episode_nfo_updated'] += 1
+                                                                else:
+                                                                    library_result[f'{library.get("name")}']['episode_nfo_failure'] += 1
+                                                            else:
+                                                                logger.info(f'[SKIPPED] Episode NFO for {media_title} skipped is not older than last updated metadata')
+                                                                library_result[f'{library.get("name")}']['episode_nfo_skipped'] += 1
                                                     else:
                                                         episode_nfo_status = write_episode_nfo(episode_nfo_path, episode_root, media_title)
                                                         if episode_nfo_status:
@@ -765,9 +783,7 @@ def main(args):
                                     logger.info(f'[DRY RUN] Poster for {media_title} will be {status}')
                                 else:
                                     if file_exists:
-                                        file_mod_time = int(os.path.getmtime(poster_path))
-                                        server_mod_time = int(meta_root.get('updatedAt'))
-                                        if file_mod_time < server_mod_time:
+                                        if force_overwrite:
                                             poster_status = download_image(url, headers, poster_path)
                                             if poster_status:
                                                 logger.verbose(f'[UPDATED] Poster for {media_title} successfully saved to {poster_path}')
@@ -775,8 +791,18 @@ def main(args):
                                             else:
                                                 library_result[f'{library.get("name")}']['poster_failure'] += 1
                                         else:
-                                            logger.verbose(f'[SKIPPED] Poster for {media_title} skipped because poster file is not older than last updated metadata')
-                                            library_result[f'{library.get("name")}']['poster_skipped'] += 1
+                                            file_mod_time = int(os.path.getmtime(poster_path))
+                                            server_mod_time = int(meta_root.get('updatedAt'))
+                                            if file_mod_time < server_mod_time:
+                                                poster_status = download_image(url, headers, poster_path)
+                                                if poster_status:
+                                                    logger.verbose(f'[UPDATED] Poster for {media_title} successfully saved to {poster_path}')
+                                                    library_result[f'{library.get("name")}']['poster_updated'] += 1
+                                                else:
+                                                    library_result[f'{library.get("name")}']['poster_failure'] += 1
+                                            else:
+                                                logger.verbose(f'[SKIPPED] Poster for {media_title} skipped because poster file is not older than last updated metadata')
+                                                library_result[f'{library.get("name")}']['poster_skipped'] += 1
                                     else:
                                         poster_status = download_image(url, headers, poster_path)
                                         if poster_status:
@@ -801,9 +827,7 @@ def main(args):
                                     logger.info(f'[DRY RUN] Fanart for {media_title} will be {status}')
                                 else:
                                     if file_exists:
-                                        file_mod_time = int(os.path.getmtime(fanart_path))
-                                        server_mod_time = int(meta_root.get('updatedAt'))
-                                        if file_mod_time < server_mod_time:
+                                        if force_overwrite:
                                             art_status = download_image(url, headers, fanart_path)
                                             if art_status:
                                                 logger.verbose(f'[UPDATED] Art for {media_title} successfully saved to {fanart_path}')
@@ -811,8 +835,18 @@ def main(args):
                                             else:
                                                 library_result[f'{library.get("name")}']['art_failure'] += 1
                                         else:
-                                            logger.verbose(f'[SKIPPED] Fanart for {media_title} skipped because fanart file is not older than last updated metadata')
-                                            library_result[f'{library.get("name")}']['art_skipped'] += 1
+                                            file_mod_time = int(os.path.getmtime(fanart_path))
+                                            server_mod_time = int(meta_root.get('updatedAt'))
+                                            if file_mod_time < server_mod_time:
+                                                art_status = download_image(url, headers, fanart_path)
+                                                if art_status:
+                                                    logger.verbose(f'[UPDATED] Art for {media_title} successfully saved to {fanart_path}')
+                                                    library_result[f'{library.get("name")}']['art_updated'] += 1
+                                                else:
+                                                    library_result[f'{library.get("name")}']['art_failure'] += 1
+                                            else:
+                                                logger.verbose(f'[SKIPPED] Fanart for {media_title} skipped because fanart file is not older than last updated metadata')
+                                                library_result[f'{library.get("name")}']['art_skipped'] += 1
                                     else:
                                         art_status = download_image(url, headers, fanart_path)
                                         if art_status:
@@ -852,16 +886,26 @@ def main(args):
                                             logger.info(f'[DRY RUN] Season poster for {media_title} will be {status}')
                                         else:
                                             if file_exists:
-                                                file_mod_time = int(os.path.getmtime(season_path))
-                                                server_mod_time = int(meta_root.get('updatedAt'))
-                                                if file_mod_time < server_mod_time:
+                                                if force_overwrite:
                                                     season_poster_status = download_image(url, headers, season_path)
                                                     if season_poster_status:
                                                         logger.verbose(f'[UPDATED] {season_title} poster for {media_title} successfully saved to {season_path}')
                                                         library_result[f'{library.get("name")}']['season_poster_updated'] += 1
+                                                    else:
+                                                        library_result[f'{library.get("name")}']['season_poster_failure'] += 1
                                                 else:
-                                                    logger.verbose(f'[SKIPPED] {season_title} poster skipped because file is not older than last updated metadata')
-                                                    library_result[f'{library.get("name")}']['season_poster_skipped'] += 1
+                                                    file_mod_time = int(os.path.getmtime(season_path))
+                                                    server_mod_time = int(meta_root.get('updatedAt'))
+                                                    if file_mod_time < server_mod_time:
+                                                        season_poster_status = download_image(url, headers, season_path)
+                                                        if season_poster_status:
+                                                            logger.verbose(f'[UPDATED] {season_title} poster for {media_title} successfully saved to {season_path}')
+                                                            library_result[f'{library.get("name")}']['season_poster_updated'] += 1
+                                                        else:
+                                                            library_result[f'{library.get("name")}']['season_poster_failure'] += 1
+                                                    else:
+                                                        logger.verbose(f'[SKIPPED] {season_title} poster skipped because file is not older than last updated metadata')
+                                                        library_result[f'{library.get("name")}']['season_poster_skipped'] += 1
                                             else:
                                                 season_poster_status = download_image(url, headers, season_path)
                                                 if season_poster_status:
@@ -937,20 +981,22 @@ if __name__ == '__main__':
     parser.add_argument("--nfo-name-type", choices=["default", "title", "filename"], default=None)
     parser.add_argument("--image-name-type", choices=["default", "title", "filename"], default=None)
 
-    parser.add_argument("--export-nfo", dest="export_nfo", action="store_true", help="Export NFO files", default=None)
+    parser.add_argument("--export-nfo", dest="export_nfo", action="store_true", help="Export NFO files; overrides config.yml setting", default=None)
     parser.add_argument("--no-export-nfo", dest="export_nfo", action="store_false", help="Do not export NFO files")
 
-    parser.add_argument("--export-poster", dest="export_poster", action="store_true", help="Export posters", default=None)
+    parser.add_argument("--export-poster", dest="export_poster", action="store_true", help="Export posters; overrides config.yml setting", default=None)
     parser.add_argument("--no-export-poster", dest="export_poster", action="store_false")
 
-    parser.add_argument("--export-fanart", dest="export_fanart", action="store_true", help="Export fanarts", default=None)
+    parser.add_argument("--export-fanart", dest="export_fanart", action="store_true", help="Export fanarts; overrides config.yml setting", default=None)
     parser.add_argument("--no-export-fanart", dest="export_fanart", action="store_false")
 
-    parser.add_argument("--export-season-poster", dest="export_season_poster", action="store_true", help="Export season poster", default=None)
+    parser.add_argument("--export-season-poster", dest="export_season_poster", action="store_true", help="Export season poster; overrides config.yml setting", default=None)
     parser.add_argument("--no-export-season-poster", dest="export_season_poster", action="store_false")
 
-    parser.add_argument("--export-episode-nfo", dest="export_episode_nfo", action="store_true", help="Export episode NFO files", default=None)
+    parser.add_argument("--export-episode-nfo", dest="export_episode_nfo", action="store_true", help="Export episode NFO files; overrides config.yml setting", default=None)
     parser.add_argument("--no-export-episode-nfo", dest="export_episode_nfo", action="store_false")
+
+    parser.add_argument("--force-overwrite", "-f", dest="force_overwrite", action=StoreTrueIfFlagPresent, nargs=0, help="Overwrite files without checking server metadata; overrides config.yml setting", default=None)
 
     parser.add_argument("--dry-run", action="store_true", help="Simulate actions without making any changes")
 

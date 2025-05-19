@@ -9,11 +9,8 @@ Token: ${PLEX_TOKEN} # how to get token https://support.plex.tv/articles/2040594
 # if the library type is music, input it TWICE CONSECUTIVELY. This is due to plex having 2 different roots for music library, each for artist and albums
 Libraries: ['Movies', 'TV Shows', 'Anime', 'Music', 'Music']
 
-# DEPRECATED, now using file time minus server time, if there is metadata update on the server then everything will be replaced
-# minimum age (days) for NFO/poster/art not to be replaced
-# i.e setting 15 means any NFO/poster/art file older than 15 days will not be replaced
-# !!!!!!! set lower than how often you plan to run the script !!!!!!!
-# days_difference: 4
+# overwrite files without checking if they are up-to-date with server's metadata
+Force overwrite: false
 
 # true/false choose what to export
 Export NFO: true
