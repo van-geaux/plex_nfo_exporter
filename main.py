@@ -72,15 +72,23 @@ def set_logger(log_level):
     logger.addHandler(console_handler)
 
     # File handler
+    log_count = 1
+    while True:
+        log_name = f'app-{datetime.now().date().isoformat().replace("-", "")}-{log_count}'
+        if os.path.exists(f'logs/{log_name}.log'):
+            log_count += 1
+        else:
+            break
+
     file_handler = logging.FileHandler(
-        f"logs/app-{datetime.now().date().isoformat().replace('-', '')}.log", encoding='utf-8'
+        f"logs/{log_name}.log", encoding='utf-8'
     )
     file_handler.setLevel(log_level_file)
     file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
 
-    return logger
+    return logger, log_name
 
 def ensure_files_exist():
     """
@@ -198,6 +206,40 @@ def env_var_constructor(loader, node):
 
     return value
 
+def fallback_response(url, token):
+    start = 0
+    container_size = 1000
+    full_root = None
+
+    while True:
+        fallback_headers = {
+            'X-Plex-Token': token,
+            'X-Plex-Container-Start': str(start),
+            'X-Plex-Container-Size': str(container_size)
+        }
+        
+        response = requests.get(url, headers=fallback_headers)
+
+        if response.status_code != 200:
+            logger.error(f"Error: {response.status_code}")
+            break
+        
+        root = ET.fromstring(response.content)
+
+        if full_root is None:
+            full_root = root
+        else:
+            library_contents = root.findall('Directory')
+            for item in library_contents:
+                full_root.append(item)
+
+        if len(root.findall('Directory')) < container_size:
+            break
+
+        start += container_size
+
+    return response
+
 def get_library_details(plex_url:str, headers:dict, library_names:list) -> list:
     """
     Get details about available libraries
@@ -244,10 +286,9 @@ def get_media_path(library_type, meta_root, meta_url, path_mapping, headers):
         media_path_parts = meta_root.findall('.//Location')
         media_paths = []
         for media_part in media_path_parts:
-            media_paths.append(media_part.get('path'))
-        media_path_dirty = {path_member[:path_member.rfind("/")]+"/" for path_member in media_paths}
+            media_paths.append(media_part.get('path')+'/')
         media_path_final = []
-        for path_member in media_path_dirty:
+        for path_member in media_paths:
             for path_list in path_mapping:
                 path_member = path_member.replace(path_list.get('plex'), path_list.get('local'))
             media_path_final.append(path_member)
@@ -326,6 +367,7 @@ def download_image(url:str, headers:dict, save_path:str) -> None:
             return False
         else:
             logger.verbose(f"[FAILURE] Failed to retrieve image. HTTP Status Code: {response.status_code}")
+            return False
     except Exception as e:
         logger.verbose(f"[FAILURE] An error occurred: {e}")
         return False
@@ -475,8 +517,6 @@ def write_episode_nfo(episode_nfo_path, episode_root, media_title):
 
             nfo.write('</episodedetails>')
 
-            logger.verbose(f'[SUCCESS] Episode NFO for {media_title} successfully saved to {episode_nfo_path}')
-
             return True
 
     except Exception as e:
@@ -489,6 +529,65 @@ def write_episode_nfo(episode_nfo_path, episode_root, media_title):
                 logger.verbose(f'[CLEANUP] Failed to remove incomplete Episode NFO at {episode_nfo_path}: {rm_err}')
 
         return False
+    
+def process_media(type, config, file_path, library_type, media_root, media_title, dry_run, force_overwrite, season_dir='', season_path=''):
+    file_exists = os.path.exists(season_path or file_path)
+    if not os.path.exists(os.path.dirname(season_path or file_path)):
+        logger.verbose(f'[FAILURE] {type} for {media_title} skipped because {os.path.dirname(season_path or file_path)} is not exist')
+        return 'not_exist'
+    elif dry_run:
+        status = 'checked and rewritten' if file_exists else f'saved to {season_path or file_path}'
+        logger.info(f'[DRY RUN] {type} for {media_title} will be {status}')
+        return 'dry_run'
+    else:
+        try:
+            if file_exists:
+                file_mod_time = int(os.path.getmtime(season_path or file_path))
+                server_mod_time = int(media_root.get('updatedAt') or 0)
+                if (file_mod_time < server_mod_time) or force_overwrite:
+                    if type == 'NFO':
+                        file_status = write_nfo(config, file_path, library_type, media_root, media_title)
+                    elif type == 'Episode NFO':
+                        file_status = write_episode_nfo(file_path, media_root, media_title)
+                    elif type in ('Poster', 'Season Poster', 'Art'):
+                        if type == 'Poster':
+                            url = urljoin(baseurl, media_root.get('thumb'))
+                        elif type == 'Season Poster':
+                            url = urljoin(baseurl, season_dir.get('thumb'))
+                        else:
+                            url = urljoin(baseurl, media_root.get('art'))
+                        file_status = download_image(url, headers, season_path or file_path)
+
+                    if file_status:
+                        logger.verbose(f'[UPDATED] {type} for {media_title} successfully saved to {season_path or file_path}')
+                        return 'updated'
+                    else:
+                        return 'failure'
+                else:
+                    logger.verbose(f'[SKIPPED] {type} for {media_title} skipped because file is not older than last updated metadata')
+                    return 'skipped'
+            else:
+                if type == 'NFO':
+                    file_status = write_nfo(config, file_path, library_type, media_root, media_title)
+                elif type == 'Episode NFO':
+                    file_status = write_episode_nfo(file_path, media_root, media_title)
+                elif type in ('Poster', 'Season Poster', 'Art'):
+                    if type == 'Poster':
+                        url = urljoin(baseurl, media_root.get('thumb'))
+                    elif type == 'Season Poster':
+                        url = urljoin(baseurl, season_dir.get('thumb'))
+                    else:
+                        url = urljoin(baseurl, media_root.get('art'))
+                    file_status = download_image(url, headers, season_path or file_path)
+
+                if file_status:
+                    logger.verbose(f'[ADDED] {type} for {media_title} successfully saved to {season_path or file_path}')
+                    return 'success'
+                else:
+                    return 'failure'
+        except Exception as e:
+            logger.verbose(f'[FAILURE] {type} for {media_title} failed: {e}')
+            return 'failure'
 
 def sanitize_filename(filename):
     filename = filename.replace(": ", " - ")
@@ -508,7 +607,7 @@ def sanitize_filename(filename):
 def str_to_bool(value):
     return str(value).lower() in ("1", "true", "yes", "on")
 
-def main(args):
+def main(args, log_name):
     if os.path.exists('/app/config/.env'):
         load_dotenv('/app/config/.env')
     else:
@@ -521,10 +620,12 @@ def main(args):
         config_content = re.sub(r'\$\{(\w+)\}', lambda match: os.getenv(match.group(1), ''), config_content)
         config = yaml.safe_load(config_content)
 
+    global baseurl
     baseurl = (args.url or os.getenv("PLEX_URL") or config.get("Base URL")).strip("'\"")
     if not baseurl:
         logger.warning('Failed to read Plex url, please check config/variables')
         sys.exit()
+    logger.debug(f'baseurl: f{baseurl}')
 
     token = (args.token or os.getenv("PLEX_TOKEN") or config['Token']).strip("'\"")
     if not token:
@@ -535,9 +636,12 @@ def main(args):
     if not library_names:
         logger.warning('No library name is provided, please check config/variables')
         sys.exit()
+    logger.debug(f'library_names: f{library_names}')
 
     path_mapping = config['Path mapping']
+    logger.debug(f'path_mapping: f{path_mapping}')
 
+    global headers
     headers = {'X-Plex-Token': token}
     library_details = get_library_details(baseurl, headers, library_names)
 
@@ -571,6 +675,9 @@ def main(args):
     export_fanart = exports['export_fanart']
     export_season_poster = exports['export_season_poster']
 
+    movie_filename_type = (args.nfo_name_type or config.get('Movie NFO name type') or 'default').lower()
+    image_filename_type = (args.image_name_type or config.get('Movie Poster/art name type') or 'default').lower()
+
     if args.force_overwrite:
         force_overwrite = True
         logger.debug(f'force_overwrite is set to True by command-line argument.')
@@ -596,7 +703,9 @@ def main(args):
 
     print('')
     for library in library_details:
-        library_result[f'{library.get("name")}'] = {
+        library_name = library.get("name")
+
+        library_result[f'{library_name}'] = {
             'start': datetime.now().strftime("%Y-%m-%d %H:%M")
             , 'finish': ''
             , 'nfo_new': 0
@@ -624,7 +733,7 @@ def main(args):
         lib_type = library.get('type')
         if lib_type in type_map:
             library_type, library_root = type_map[lib_type]
-        elif lib_type and check_music == 0:
+        elif check_music == 0:
             library_type, library_root = 'artist', 'Directory'
             check_music += 1
         elif check_music == 1:
@@ -639,39 +748,9 @@ def main(args):
         response = requests.get(url, headers=headers)
 
         if response.status_code == 400:
-            start = 0
-            container_size = 1000
-            full_root = None
-
-            while True:
-                fallback_headers = {
-                    'X-Plex-Token': token,
-                    'X-Plex-Container-Start': str(start),
-                    'X-Plex-Container-Size': str(container_size)
-                }
-                
-                response = requests.get(url, headers=fallback_headers)
-
-                if response.status_code != 200:
-                    logger.error(f"Error: {response.status_code}")
-                    break
-                
-                root = ET.fromstring(response.content)
-
-                if full_root is None:
-                    full_root = root
-                else:
-                    library_contents = root.findall('Directory')
-                    for item in library_contents:
-                        full_root.append(item)
-
-                if len(root.findall('Directory')) < container_size:
-                    break
-
-                start += container_size
+            response = fallback_response(url, token)
 
         elif response.status_code == 200:
-            logger.debug('Getting root...')
             full_root = ET.fromstring(response.content)
         else:
             logger.error(f'Failed to get library info with error code {response.status_code}: {response.text}')
@@ -683,7 +762,7 @@ def main(args):
             bar.text(f'for {library.get("name")}')
             for content in library_contents:
                 ratingkey = content.get('ratingKey')  
-                meta_url = urljoin(baseurl, f'/library/metadata/{ratingkey}')  
+                meta_url = urljoin(baseurl, f'/library/metadata/{ratingkey}')
                 meta_response = requests.get(meta_url, headers=headers)
                 if meta_response.status_code == 200:
                     meta_root = ET.fromstring(meta_response.content).find(library_root)
@@ -698,49 +777,27 @@ def main(args):
                         file_title = meta_root.find('Media/Part').get('file')
                     else:
                         file_title = None
-
-                    movie_filename_type = (args.nfo_name_type or config.get('Movie NFO name type') or 'default').lower()
-                    image_filename_type = (args.image_name_type or config.get('Movie Poster/art name type') or 'default').lower()
                     
+
                     media_path_final = get_media_path(library_type, meta_root, meta_url, path_mapping, headers)
 
                     for media_path in media_path_final:
+                        logger.debug(f'media_path: {media_path}')
                         nfo_path, poster_path, fanart_path = get_file_path(library_type, movie_filename_type, image_filename_type, media_path, media_title, file_title)
 
                         if export_nfo:
-                            file_exists = os.path.exists(nfo_path)
+                            nfo_status = process_media('NFO', config, nfo_path, library_type, meta_root, media_title, dry_run, force_overwrite)
 
-                            if not os.path.exists(os.path.dirname(nfo_path)):
-                                logger.verbose(f'[FAILURE] NFO for {media_title} skipped because {os.path.dirname(nfo_path)} is not exist')
-                                library_result[f'{library.get("name")}']['nfo_failure'] += 1
-                            elif dry_run:
-                                status = 'checked and rewritten' if file_exists else f'saved to {nfo_path}'
-                                logger.info(f'[DRY RUN] NFO for {media_title} will be {status}')
-                            else:
-                                try:
-                                    if file_exists:
-                                        file_mod_time = int(os.path.getmtime(nfo_path))
-                                        server_mod_time = int(meta_root.get('updatedAt') or 0)
-                                        if (file_mod_time < server_mod_time) or force_overwrite:
-                                            nfo_status = write_nfo(config, nfo_path, library_type, meta_root, media_title)
-                                            if nfo_status:
-                                                logger.verbose(f'[UPDATED] NFO for {media_title} successfully saved to {nfo_path}')
-                                                library_result[f'{library.get("name")}']['nfo_updated'] += 1
-                                            else:
-                                                library_result[f'{library.get("name")}']['nfo_failure'] += 1
-                                        else:
-                                            logger.verbose(f'[SKIPPED] NFO for {media_title} skipped because NFO file is not older than last updated metadata')
-                                            library_result[f'{library.get("name")}']['nfo_skipped'] += 1
-                                    else:
-                                        nfo_status = write_nfo(config, nfo_path, library_type, meta_root, media_title)
-                                        if nfo_status:
-                                            logger.verbose(f'[ADDED] NFO for {media_title} successfully saved to {nfo_path}')
-                                            library_result[f'{library.get("name")}']['nfo_new'] += 1
-                                        else:
-                                            library_result[f'{library.get("name")}']['nfo_failure'] += 1
-                                except Exception as e:
-                                    logger.verbose(f'[FAILURE] NFO for {media_title} failed: {e}')
-                                    library_result[f'{library.get("name")}']['nfo_failure'] += 1
+                            if nfo_status == 'success':
+                                library_result[f'{library_name}']['nfo_new'] += 1
+                            elif nfo_status == 'updated':
+                                library_result[f'{library_name}']['nfo_updated'] += 1
+                            elif nfo_status == 'skipped':
+                                library_result[f'{library_name}']['nfo_skipped'] += 1
+                            elif nfo_status == 'not_exist':
+                                library_result[f'{library_name}']['nfo_failure'] += 1
+                            elif nfo_status == 'failure':
+                                library_result[f'{library_name}']['nfo_failure'] += 1
 
                         if export_episode_nfo and library_type == 'tvshow':
                             try:
@@ -765,107 +822,50 @@ def main(args):
                                                 for path in path_mapping:
                                                     episode_nfo_path = episode_nfo_path.replace(path['plex'], path['local'])
 
-                                                file_exists = os.path.exists(episode_nfo_path)
-                                                if not os.path.exists(os.path.dirname(episode_nfo_path)):
-                                                    logger.verbose(f'[FAILURE] Episode NFO for {media_title} skipped because {os.path.dirname(episode_nfo_path)} is not exist')
-                                                    library_result[f'{library.get("name")}']['episode_nfo_failure'] += 1
-                                                elif dry_run:
-                                                    status = 'checked and rewritten' if file_exists else f'saved to {episode_path}'
-                                                    logger.info(f'[DRY RUN] Episode NFO for {media_title} will be {status}')
-                                                else:
-                                                    if file_exists:
-                                                        file_mod_time = int(os.path.getmtime(episode_nfo_path))
-                                                        server_mod_time = int(meta_root.get('updatedAt') or 0)
-                                                        if (file_mod_time < server_mod_time) or force_overwrite:
-                                                            episode_nfo_status = write_episode_nfo(episode_nfo_path, episode_root, media_title)
-                                                            if episode_nfo_status:
-                                                                logger.verbose(f'[UPDATED] NFO for {episode_nfo_path} successfully saved')
-                                                                library_result[f'{library.get("name")}']['episode_nfo_updated'] += 1
-                                                            else:
-                                                                library_result[f'{library.get("name")}']['episode_nfo_failure'] += 1
-                                                        else:
-                                                            logger.info(f'[SKIPPED] Episode NFO for {media_title} skipped is not older than last updated metadata')
-                                                            library_result[f'{library.get("name")}']['episode_nfo_skipped'] += 1
-                                                    else:
-                                                        episode_nfo_status = write_episode_nfo(episode_nfo_path, episode_root, media_title)
-                                                        if episode_nfo_status:
-                                                            logger.verbose(f'[ADDED] NFO for {episode_nfo_path} successfully saved')
-                                                            library_result[f'{library.get("name")}']['episode_nfo_new'] += 1
-                                                        else:
-                                                            library_result[f'{library.get("name")}']['episode_nfo_failure'] += 1
+                                                episode_nfo_status = process_media('Episode NFO', config, episode_nfo_path, library_type, meta_root, media_title, dry_run, force_overwrite)
+
+                                                if episode_nfo_status == 'success':
+                                                    library_result[f'{library_name}']['episode_nfo_new'] += 1
+                                                elif episode_nfo_status == 'updated':
+                                                    library_result[f'{library_name}']['episode_nfo_updated'] += 1
+                                                elif episode_nfo_status == 'skipped':
+                                                    library_result[f'{library_name}']['episode_nfo_skipped'] += 1
+                                                elif episode_nfo_status == 'not_exist':
+                                                    library_result[f'{library_name}']['episode_nfo_failure'] += 1
+                                                elif episode_nfo_status == 'failure':
+                                                    library_result[f'{library_name}']['episode_nfo_failure'] += 1
+
                             except Exception as e:
                                 logger.verbose(f'[FAILURE] Episode NFO for {media_title} failed: {e}')
-                                library_result[f'{library.get("name")}']['episode_nfo_failure'] += 1
+                                library_result[f'{library_name}']['episode_nfo_failure'] += 1
 
                         if export_poster:
-                            try:
-                                url = urljoin(baseurl, meta_root.get('thumb'))
-                                file_exists = os.path.exists(poster_path)
-                                if not os.path.exists(os.path.dirname(poster_path)):
-                                    logger.verbose(f'[FAILURE] Poster for {media_title} skipped because {os.path.dirname(poster_path)} is not exist')
-                                    library_result[f'{library.get("name")}']['poster_failure'] += 1
-                                elif dry_run:
-                                    status = 'checked and rewritten' if file_exists else f'saved to {poster_path}'
-                                    logger.info(f'[DRY RUN] Poster for {media_title} will be {status}')
-                                else:
-                                    if file_exists:
-                                        file_mod_time = int(os.path.getmtime(poster_path))
-                                        server_mod_time = int(meta_root.get('updatedAt') or 0)
-                                        if (file_mod_time < server_mod_time) or force_overwrite:
-                                            poster_status = download_image(url, headers, poster_path)
-                                            if poster_status:
-                                                logger.verbose(f'[UPDATED] Poster for {media_title} successfully saved to {poster_path}')
-                                                library_result[f'{library.get("name")}']['poster_updated'] += 1
-                                            else:
-                                                library_result[f'{library.get("name")}']['poster_failure'] += 1
-                                        else:
-                                            logger.verbose(f'[SKIPPED] Poster for {media_title} skipped because poster file is not older than last updated metadata')
-                                            library_result[f'{library.get("name")}']['poster_skipped'] += 1
-                                    else:
-                                        poster_status = download_image(url, headers, poster_path)
-                                        if poster_status:
-                                            logger.verbose(f'[ADDED] Poster for {media_title} successfully saved to {poster_path}')
-                                            library_result[f'{library.get("name")}']['poster_new'] += 1
-                                        else:
-                                            library_result[f'{library.get("name")}']['poster_failure'] += 1
-                            except Exception as e:
-                                logger.verbose(f'[FAILURE] Poster for {media_title} failed: {e}')
-                                library_result[f'{library.get("name")}']['poster_failure'] += 1
+                            poster_status = process_media('Poster', config, poster_path, library_type, meta_root, media_title, dry_run, force_overwrite)
+
+                            if poster_status == 'success':
+                                library_result[f'{library_name}']['poster_new'] += 1
+                            elif poster_status == 'updated':
+                                library_result[f'{library_name}']['poster_updated'] += 1
+                            elif poster_status == 'skipped':
+                                library_result[f'{library_name}']['poster_skipped'] += 1
+                            elif poster_status == 'not_exist':
+                                library_result[f'{library_name}']['poster_failure'] += 1
+                            elif nfo_status == 'failure':
+                                library_result[f'{library_name}']['poster_failure'] += 1
 
                         if export_fanart:
-                            try:
-                                url = urljoin(baseurl, meta_root.get('art'))
-                                file_exists = os.path.exists(fanart_path)
-                                if not os.path.exists(os.path.dirname(fanart_path)):
-                                    logger.verbose(f'[FAILURE] Fanart for {media_title} skipped because {os.path.dirname(fanart_path)} is not exist')
-                                    library_result[f'{library.get("name")}']['art_failure'] += 1
-                                elif dry_run:
-                                    status = 'checked and rewritten' if file_exists else f'saved to {fanart_path}'
-                                    logger.info(f'[DRY RUN] Fanart for {media_title} will be {status}')
-                                else:
-                                    if file_exists:
-                                        file_mod_time = int(os.path.getmtime(fanart_path))
-                                        server_mod_time = int(meta_root.get('updatedAt') or 0)
-                                        if (file_mod_time < server_mod_time) or force_overwrite:
-                                            art_status = download_image(url, headers, fanart_path)
-                                            if art_status:
-                                                logger.verbose(f'[UPDATED] Art for {media_title} successfully saved to {fanart_path}')
-                                                library_result[f'{library.get("name")}']['art_updated'] += 1
-                                            else:
-                                                library_result[f'{library.get("name")}']['art_failure'] += 1
-                                        else:
-                                            logger.verbose(f'[SKIPPED] Fanart for {media_title} skipped because fanart file is not older than last updated metadata')
-                                            library_result[f'{library.get("name")}']['art_skipped'] += 1
-                                    else:
-                                        art_status = download_image(url, headers, fanart_path)
-                                        if art_status:
-                                            logger.verbose(f'[ADDED] Art for {media_title} successfully saved to {fanart_path}')
-                                            library_result[f'{library.get("name")}']['art_new'] += 1
-                                        else:
-                                            library_result[f'{library.get("name")}']['art_failure'] += 1
-                            except Exception as e:
-                                logger.verbose(f'[FAILURE] Art for {media_title} failed: {e}')
-                                library_result[f'{library.get("name")}']['art_failure'] += 1
+                            fanart_status = process_media('Art', config, fanart_path, library_type, meta_root, media_title, dry_run, force_overwrite)
+
+                            if fanart_status == 'success':
+                                library_result[f'{library_name}']['art_new'] += 1
+                            elif fanart_status == 'updated':
+                                library_result[f'{library_name}']['art_updated'] += 1
+                            elif fanart_status == 'skipped':
+                                library_result[f'{library_name}']['art_skipped'] += 1
+                            elif fanart_status == 'not_exist':
+                                library_result[f'{library_name}']['art_failure'] += 1
+                            elif fanart_status == 'failure':
+                                library_result[f'{library_name}']['art_failure'] += 1
 
                         if export_season_poster and library_type == 'tvshow':
                             try:
@@ -884,35 +884,19 @@ def main(args):
                                         if season_title == 'specials':
                                             season_path = os.path.join(media_path, f'season-{season_title}-cover.jpg')
 
-                                        url = urljoin(baseurl, season_dir.get('thumb'))
-                                        file_exists = os.path.exists(season_path)
-                                        if not os.path.exists(os.path.dirname(season_path)):
-                                            logger.verbose(f'[FAILURE] Season poster for {media_title} skipped because {os.path.dirname(season_path)} is not exist')
-                                            library_result[f'{library.get("name")}']['season_poster_failure'] += 1
-                                        elif dry_run:
-                                            status = 'checked and rewritten' if file_exists else f'saved to {season_path}'
-                                            logger.info(f'[DRY RUN] Season poster for {media_title} will be {status}')
-                                        else:
-                                            if file_exists:
-                                                file_mod_time = int(os.path.getmtime(season_path))
-                                                server_mod_time = int(meta_root.get('updatedAt') or 0)
-                                                if (file_mod_time < server_mod_time) or force_overwrite:
-                                                    season_poster_status = download_image(url, headers, season_path)
-                                                    if season_poster_status:
-                                                        logger.verbose(f'[UPDATED] {season_title} poster for {media_title} successfully saved to {season_path}')
-                                                        library_result[f'{library.get("name")}']['season_poster_updated'] += 1
-                                                    else:
-                                                        library_result[f'{library.get("name")}']['season_poster_failure'] += 1
-                                                else:
-                                                    logger.verbose(f'[SKIPPED] {season_title} poster skipped because file is not older than last updated metadata')
-                                                    library_result[f'{library.get("name")}']['season_poster_skipped'] += 1
-                                            else:
-                                                season_poster_status = download_image(url, headers, season_path)
-                                                if season_poster_status:
-                                                    logger.verbose(f'[ADDED] {season_title} poster for {media_title} successfully saved to {season_path}')
-                                                    library_result[f'{library.get("name")}']['season_poster_new'] += 1
-                                                else:
-                                                    library_result[f'{library.get("name")}']['season_poster_failure'] += 1
+                                        season_poster_status = process_media('Season Poster', config, fanart_path, library_type, meta_root, media_title, dry_run, force_overwrite, season_dir, season_path)
+
+                                        if season_poster_status == 'success':
+                                            library_result[f'{library_name}']['season_poster_new'] += 1
+                                        elif season_poster_status == 'updated':
+                                            library_result[f'{library_name}']['season_poster_updated'] += 1
+                                        elif season_poster_status == 'skipped':
+                                            library_result[f'{library_name}']['season_poster_skipped'] += 1
+                                        elif season_poster_status == 'not_exist':
+                                            library_result[f'{library_name}']['season_poster_failure'] += 1
+                                        elif season_poster_status == 'failure':
+                                            library_result[f'{library_name}']['season_poster_failure'] += 1
+
                             except Exception as e:
                                 logger.info(f'[FAILURE] Season poster for {media_title} failed: {e}')
                                 library_result[f'{library.get("name")}']['season_poster_failure'] += 1
@@ -956,19 +940,20 @@ Art Images
                 print(f'''
 Season Poster Images
   - Added     : {library_result[key]['season_poster_new']} season poster(s)
-  - Updated   : {library_result[key]['season_poster_new']} season poster(s)
-  - Skipped   : {library_result[key]['season_poster_new']} season poster(s)
-  - Failed    : {library_result[key]['season_poster_new']} season poster(s)''')
+  - Updated   : {library_result[key]['season_poster_updated']} season poster(s)
+  - Skipped   : {library_result[key]['season_poster_skipped']} season poster(s)
+  - Failed    : {library_result[key]['season_poster_failure']} season poster(s)''')
                     
             if export_episode_nfo and not dry_run:
                 print(f'''
 Episode NFO Files
   - Added     : {library_result[key]['episode_nfo_new']} episode NFO(s)
-  - Updated   : {library_result[key]['episode_nfo_new']} episode NFO(s)
-  - Skipped   : {library_result[key]['episode_nfo_new']} episode NFO(s)
-  - Failed    : {library_result[key]['episode_nfo_new']} episode NFO(s)''')
+  - Updated   : {library_result[key]['episode_nfo_updated']} episode NFO(s)
+  - Skipped   : {library_result[key]['episode_nfo_skipped']} episode NFO(s)
+  - Failed    : {library_result[key]['episode_nfo_failure']} episode NFO(s)''')
                 
-    print('\nCheck the log file for entries marked [ADDED], [UPDATED], [SKIPPED], and [FAILED].')
+    print(f'\nLog file: {log_name}.log')
+    print('Check the log file for entries marked [ADDED], [UPDATED], [SKIPPED], and [FAILED].')
     print('To display those in the terminal instead, set "LOG_LEVEL" to "VERBOSE" in your config.yml or as an environment variable.\n')
 
 if __name__ == '__main__':
@@ -1006,5 +991,5 @@ if __name__ == '__main__':
     log_level = args.log_level
 
     ensure_files_exist() 
-    logger = set_logger(log_level)
-    main(args)
+    logger, log_name = set_logger(log_level)
+    main(args, log_name)
