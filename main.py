@@ -355,9 +355,9 @@ def download_image(url:str, headers:dict, save_path:str) -> None:
             content_type = response.headers.get("Content-Type", "")
             if not content_type.startswith("image/"):
                 # Save raw content for debugging
-                with open("debug_response.bin", "wb") as f:
-                    for chunk in response.iter_content(8192):
-                        f.write(chunk)
+                # with open("debug_response.bin", "wb") as f:
+                #     for chunk in response.iter_content(8192):
+                #         f.write(chunk)
                 logger.verbose(f"[ERROR] Invalid content type: {content_type}, URL: {url}")
                 return False
 
