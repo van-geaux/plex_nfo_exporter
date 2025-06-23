@@ -9,6 +9,7 @@ from PIL import Image
 from urllib.parse import urljoin
 
 import argparse
+import gzip
 import logging
 import os
 import re
@@ -345,20 +346,32 @@ def download_image(url:str, headers:dict, save_path:str) -> None:
     Download image from provided url, also convert RGBA to RGB
     """
     try:
-        response = requests.get(url, headers=headers)
+        headers = headers.copy()
+        headers["Accept-Encoding"] = "gzip"
+
+        response = requests.get(url, headers=headers, stream=True)
+
         if response.status_code == 200:
             content_type = response.headers.get("Content-Type", "")
             if not content_type.startswith("image/"):
+                # Save raw content for debugging
                 with open("debug_response.bin", "wb") as f:
-                    f.write(response.content)
-                logger.verbose(f"[ERROR] Invalid content type: {content_type}, the image url is: {url}")
+                    for chunk in response.iter_content(8192):
+                        f.write(chunk)
+                logger.verbose(f"[ERROR] Invalid content type: {content_type}, URL: {url}")
                 return False
-        
-            image = Image.open(BytesIO(response.content))
 
+            # Manually decompress if needed
+            if response.headers.get("Content-Encoding") == "gzip":
+                buffer = BytesIO(response.raw.read())
+                decompressed = gzip.GzipFile(fileobj=buffer).read()
+                image_data = BytesIO(decompressed)
+            else:
+                image_data = BytesIO(response.content)
+
+            image = Image.open(image_data)
             if image.mode in ("RGBA", "P"):
                 image = image.convert("RGB")
-
             image.save(save_path)
             return True
 
@@ -366,10 +379,11 @@ def download_image(url:str, headers:dict, save_path:str) -> None:
             logger.verbose('[FAILURE] Image does not exist')
             return False
         else:
-            logger.verbose(f"[FAILURE] Failed to retrieve image. HTTP Status Code: {response.status_code}")
+            logger.verbose(f"[FAILURE] Download Image HTTP Response: {response.status_code}")
             return False
+
     except Exception as e:
-        logger.verbose(f"[FAILURE] An error occurred: {e}")
+        logger.verbose(f"[FAILURE] Download Image failed: {e}")
         return False
 
 def write_nfo(config:dict, nfo_path:str, library_type:str, meta_root:str, media_title:str) -> None:
@@ -850,7 +864,7 @@ def main(args, log_name):
                                 library_result[f'{library_name}']['poster_skipped'] += 1
                             elif poster_status == 'not_exist':
                                 library_result[f'{library_name}']['poster_failure'] += 1
-                            elif nfo_status == 'failure':
+                            elif poster_status == 'failure':
                                 library_result[f'{library_name}']['poster_failure'] += 1
 
                         if export_fanart:
