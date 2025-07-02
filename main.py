@@ -836,7 +836,7 @@ def main(args, log_name):
                                                 for path in path_mapping:
                                                     episode_nfo_path = episode_nfo_path.replace(path['plex'], path['local'])
 
-                                                episode_nfo_status = process_media('Episode NFO', config, episode_nfo_path, library_type, meta_root, media_title, dry_run, force_overwrite)
+                                                episode_nfo_status = process_media('Episode NFO', config, episode_nfo_path, library_type, episode_root, media_title, dry_run, force_overwrite)
 
                                                 if episode_nfo_status == 'success':
                                                     library_result[f'{library_name}']['episode_nfo_new'] += 1
