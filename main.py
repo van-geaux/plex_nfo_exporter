@@ -662,7 +662,7 @@ def main(args, log_name):
     #     sys.exit()
     logger.debug(f'library_names: f{library_names}')
 
-    blacklists = config['Blacklist']
+    blacklists = config.get('Blacklist', None)
 
     path_mapping = config['Path mapping']
     logger.debug(f'path_mapping: f{path_mapping}')
