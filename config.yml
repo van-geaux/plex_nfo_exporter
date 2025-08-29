@@ -7,7 +7,9 @@ Token: ${PLEX_TOKEN} # how to get token https://support.plex.tv/articles/2040594
 
 # input the libraries you want to export NFO/poster/fanart from
 # if the library type is music, input it TWICE CONSECUTIVELY. This is due to plex having 2 different roots for music library, each for artist and albums
+# You can do all libraries using Libraries: ['*']
 Libraries: ['Movies', 'TV Shows', 'Anime', 'Music', 'Music']
+Blacklist: ['Test Movies']
 
 # overwrite files without checking if they are up-to-date with server's metadata
 Force overwrite: false

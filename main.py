@@ -113,7 +113,9 @@ Token: ${PLEX_TOKEN} # how to get token https://support.plex.tv/articles/2040594
 
 # input the libraries you want to export NFO/poster/fanart from
 # if the library type is music, input it TWICE CONSECUTIVELY. This is due to plex having 2 different roots for music library, each for artist and albums
+# You can do all libraries using Libraries: ['*']
 Libraries: ['Movies', 'TV Shows', 'Anime', 'Music', 'Music']
+Blacklist: ['Test Movies']
 
 # overwrite files without checking if they are up-to-date with server's metadata
 Force overwrite: false
@@ -241,7 +243,7 @@ def fallback_response(url, token):
 
     return response
 
-def get_library_details(plex_url:str, headers:dict, library_names:list) -> list:
+def get_library_details(plex_url:str, headers:dict, library_names:list, blacklists:list | None=None) -> list:
     """
     Get details about available libraries
     """
@@ -254,17 +256,25 @@ def get_library_details(plex_url:str, headers:dict, library_names:list) -> list:
             root = ET.fromstring(response.content)
             directories = root.findall('Directory')
 
-            for search_library in library_names:
+            if library_names[0] == '*':
                 for library in directories:
-                    if library.attrib.get('title') == search_library:
+                    if library.attrib.get('title') not in blacklists:
                         library_details.append({"key": library.attrib.get('key'), "type": library.attrib.get('type'), "name": library.attrib.get('title')})
-                        break
-                else:
-                    logger.warning(f'"Library {search_library}" not found in Plex.')
+                    
+                    if library.attrib.get('title') in blacklists:
+                        logger.warning(f'Skipping "{library.attrib.get("title")}" due to blacklist.')
+            else:
+                for search_library in library_names:
+                    for library in directories:
+                        if library.attrib.get('title') == search_library and library.attrib.get('title') not in blacklists:
+                            library_details.append({"key": library.attrib.get('key'), "type": library.attrib.get('type'), "name": library.attrib.get('title')})
+                            break
 
-    if not library_details:
-        logger.warning(f'None of the specified libraries were found in Plex. Exiting...')
-        sys.exit()
+                        if library.attrib.get('title') == search_library and library.attrib.get('title') in blacklists:
+                            logger.warning(f'Skipping "{library.attrib.get("title")}" due to blacklist.')
+
+                # else:
+                #     logger.warning(f'Library "{search_library}" not found in Plex.')
 
     return library_details
 
@@ -647,17 +657,19 @@ def main(args, log_name):
         sys.exit()
 
     library_names = args.library or config['Libraries']
-    if not library_names:
-        logger.warning('No library name is provided, please check config/variables')
-        sys.exit()
+    # if not library_names:
+    #     logger.warning('No library name is provided, please check config/variables')
+    #     sys.exit()
     logger.debug(f'library_names: f{library_names}')
+
+    blacklists = config['Blacklist']
 
     path_mapping = config['Path mapping']
     logger.debug(f'path_mapping: f{path_mapping}')
 
     global headers
     headers = {'X-Plex-Token': token}
-    library_details = get_library_details(baseurl, headers, library_names)
+    library_details = get_library_details(baseurl, headers, library_names, blacklists)
 
     check_music = 0
 

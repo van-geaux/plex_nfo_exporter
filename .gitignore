@@ -155,3 +155,4 @@ cython_debug/
 /logs*
 
 *ipynb
+*copy.py
