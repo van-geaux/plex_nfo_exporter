@@ -66,6 +66,7 @@ PLEX_TOKEN='super-scecret-token'
 services:
   plex-nfo-exporter:
     image: ghcr.io/van-geaux/plex_nfo_exporter:latest
+    user: 1000:100 # set this to match your media folder’s user and group ID. If left out, all files will be created as root
     environment:
       - TZ=Asia/Jakarta
       - CRON_SCHEDULE=0 4 * * * # if not set will default to 4AM everyday

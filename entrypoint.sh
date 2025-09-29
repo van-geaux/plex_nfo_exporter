@@ -6,15 +6,14 @@ CRON_SCHEDULE="${CRON_SCHEDULE:-'0 4 * * *'}"
 
 echo "Using CRON_SCHEDULE: $CRON_SCHEDULE"
 
-echo "PATH=/usr/local/bin:/usr/bin:/bin" > /etc/cron.d/mycron
-echo "$CRON_SCHEDULE cd /app && /usr/local/bin/python -u main.py >> /proc/1/fd/1 2>> /proc/1/fd/2" >> /etc/cron.d/mycron
-
-chmod 0644 /etc/cron.d/mycron
-crontab /etc/cron.d/mycron
+{
+  echo "PATH=/usr/local/bin:/usr/bin:/bin"
+  echo "$CRON_SCHEDULE python /app/main.py"
+} > /app/crontab
 
 if [ "$RUN_IMMEDIATELY" = "true" ]; then
     echo "Running script immediately..."
-    cd /app && /usr/local/bin/python -u main.py >> /proc/1/fd/1 2>> /proc/1/fd/2
+    python /app/main.py
 fi
 
-cron -L 15 -f
+exec supercronic /app/crontab
