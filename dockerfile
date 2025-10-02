@@ -14,6 +14,7 @@ ADD https://github.com/aptible/supercronic/releases/download/v0.2.29/supercronic
 RUN chmod +x /usr/local/bin/supercronic
 
 COPY entrypoint.sh /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

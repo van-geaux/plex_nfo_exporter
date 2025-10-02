@@ -2,7 +2,7 @@
 
 cd /app || exit 1
 
-CRON_SCHEDULE="${CRON_SCHEDULE:-'0 4 * * *'}"
+CRON_SCHEDULE="${CRON_SCHEDULE:-0 4 * * *}"
 
 echo "Using CRON_SCHEDULE: $CRON_SCHEDULE"
 
