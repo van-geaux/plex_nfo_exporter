@@ -33,7 +33,7 @@ class StoreTrueIfFlagPresent(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         setattr(namespace, self.dest, True)
 
-def set_logger(log_level):
+def set_logger(log_level, config_path=None):
     if not os.path.exists('logs'):
         os.makedirs('logs')
 
@@ -44,6 +44,9 @@ def set_logger(log_level):
         oldest_file = files[0]
         os.remove(oldest_file)
         print(f"Deleted: {oldest_file}")
+
+    if config_path is None:
+        config_path = resolve_config_file_path()
 
     with open(config_path, 'r', encoding='utf-8') as file:
         config_content = file.read()
@@ -718,7 +721,10 @@ def sanitize_filename(filename):
 def str_to_bool(value):
     return str(value).lower() in ("1", "true", "yes", "on")
 
-def load_configuration():
+def load_configuration(config_path=None):
+    if config_path is None:
+        config_path = resolve_config_file_path()
+
     if os.path.exists('/app/config/.env'):
         load_dotenv('/app/config/.env')
     else:
@@ -1031,8 +1037,8 @@ def print_library_summary(library_result, exports):
                 f"\nEpisode NFO Files\n  - Added     : {summary['episode_nfo_new']} episode NFO(s)\n  - Updated   : {summary['episode_nfo_updated']} episode NFO(s)\n  - Skipped   : {summary['episode_nfo_skipped']} episode NFO(s)\n  - Failed    : {summary['episode_nfo_failure']} episode NFO(s)"
             )
 
-def main(args, log_name):
-    config = load_configuration()
+def main(args, log_name, config_path=None):
+    config = load_configuration(config_path)
 
     token, library_names, blacklists, path_mapping = resolve_base_settings(args, config)
 
@@ -1105,9 +1111,13 @@ if __name__ == '__main__':
 
     parser.add_argument("--log-level", choices=["DEBUG", "INFO", "WARNING", "CRITICAL", "VERBOSE"], type=str.upper, default=None)
 
+    parser.add_argument("--config", "-c", help="Path to config file (optional, defaults to auto-detect)")
+
     args = parser.parse_args()
     log_level = args.log_level
 
+    resolved_config_path = args.config if args.config is not None else resolve_config_file_path()
+
     ensure_files_exist() 
-    logger, log_name = set_logger(log_level)
-    main(args, log_name)
+    logger, log_name = set_logger(log_level, resolved_config_path)
+    main(args, log_name, resolved_config_path)
