@@ -314,7 +314,10 @@ def get_media_path(library_type, meta_root, meta_url, path_mapping, headers):
         media_path_parts = meta_root.findall('.//Part')
         media_paths = []
         for media_part in media_path_parts:
-            media_paths.append(media_part.get('file'))
+            if media_part is not None:
+                file_attr = media_part.get('file')
+                if file_attr is not None:
+                    media_paths.append(file_attr)
         media_path_dirty = {path_member[:path_member.rfind("/")]+"/" for path_member in media_paths}
         media_path_final = []
         for path_member in media_path_dirty:
@@ -891,7 +894,12 @@ def export_episode_nfos(meta_url, path_mapping, config, media_title, dry_run, fo
                 if episode_root is None:
                     continue
 
-                episode_path = episode_root.find('Media/Part').get('file')
+                episode_part = episode_root.find('Media/Part')
+                if episode_part is None:
+                    continue
+                episode_path = episode_part.get('file')
+                if episode_path is None:
+                    continue
                 episode_nfo_path = episode_path[:episode_path.rfind('.')] + '.nfo'
                 for path_map in path_mapping:
                     episode_nfo_path = episode_nfo_path.replace(path_map['plex'], path_map['local'])
@@ -947,7 +955,8 @@ def process_content(content, library_root, library_type, args, config, path_mapp
     if args.title and media_title not in args.title:
         return
 
-    file_title = meta_root.find('Media/Part').get('file') if library_type == 'movie' else None
+    media_part = meta_root.find('Media/Part') if library_type == 'movie' else None
+    file_title = media_part.get('file') if media_part is not None else None
     media_paths = get_media_path(library_type, meta_root, meta_url, path_mapping, headers)
 
     for media_path in media_paths:
