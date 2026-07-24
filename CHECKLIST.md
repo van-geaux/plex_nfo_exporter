@@ -48,8 +48,22 @@ and ordering; this file tracks item-by-item status. Migrated from the former
       `process_content()` (e.g. `get_media_path()`'s `ValueError` for
       albums with no tracks) and logs + continues instead of aborting the
       whole library.
-- [ ] Reduce reliance on module-level globals (`logger`, `headers`, `baseurl`)
-      so exporter functions are easier to test and reuse.
+- [x] Reduce reliance on module-level globals (`logger`, `headers`,
+      `baseurl`) so exporter functions are easier to test and reuse.
+      `logger` is now initialized at true module scope (`logging.getLogger`
+      is a singleton, so `set_logger()` configuring it later still works)
+      so it exists even before `set_logger()` runs. `headers` is no longer a
+      global at all — `main()` builds it locally and it's threaded
+      explicitly through `process_library`/`process_content`/
+      `process_media`/`fetch_library_root`/`export_episode_nfos`/
+      `export_season_posters`. `baseurl` remains a module global
+      deliberately: `get_request()`'s same-origin enforcement (Phase 3)
+      reads it via `globals()`, and removing that would silently disable
+      the security check; `resolve_base_settings()` now also returns it
+      so callers thread it explicitly instead of reading the bare global.
+      Verified with the full pytest suite plus an ad hoc end-to-end smoke
+      test (fake local Plex HTTP server, dry-run and real-write passes)
+      exercising the whole refactored call chain.
 
 ## Testability
 

@@ -56,9 +56,13 @@ mapping and filename generation, XML/NFO output, GUID handling,
 incomplete-Plex-response handling, and configuration loading/environment
 substitution. The stale `tests/test_service.py` reference to a nonexistent
 `service` package has been removed — nothing in the repo or git history to
-restore it against. Remaining: reducing reliance on module-level globals
-(`logger`, `headers`, `baseurl`) so core functions can be tested and reused
-without a live Plex connection.
+restore it against. `headers` is no longer a module global — it's built once
+in `main()` and threaded explicitly through the export call chain; `logger`
+is now initialized at module scope so it's available even before
+`set_logger()` configures it. `baseurl` stays a module global by design,
+since `get_request()`'s same-origin check depends on it, but
+`resolve_base_settings()` now also returns it so callers don't have to reach
+into module state directly. Phase 5 is complete.
 
 ## Phase 6 — Final verification and release follow-up
 
@@ -78,10 +82,10 @@ changed.
 5. Phase 5 — testability
 6. Phase 6 — final verification and release follow-up
 
-Phases 1–4 are complete. Phase 5's test-coverage items (config/env
-substitution, incomplete-response handling) are done; a CI workflow
-(`.github/workflows/ci.yml`) now runs the test suite, dependency
-consistency/vulnerability checks, and a Docker build on every push/PR. See
-`CHECKLIST.md` for the remaining open items: reducing module-level globals
-(Phase 5) and release follow-up (Phase 6 — clean-environment run,
-end-to-end Docker verification, Dependabot re-query, README update).
+Phases 1–5 are complete. A CI workflow (`.github/workflows/ci.yml`) now runs
+the test suite, dependency consistency/vulnerability checks, and a Docker
+build on every push/PR. See `CHECKLIST.md` for the remaining Phase 6 release
+follow-up items (clean-environment run, end-to-end Docker verification with
+a live Plex server, Dependabot re-query, README update) — these need a real
+Plex connection and/or repository write access this environment doesn't
+have.

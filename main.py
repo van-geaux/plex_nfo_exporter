@@ -24,6 +24,12 @@ MAX_XML_RESPONSE_BYTES = 50 * 1024 * 1024
 MAX_IMAGE_RESPONSE_BYTES = 50 * 1024 * 1024
 MAX_IMAGE_PIXELS = 100_000_000
 
+# Module-level so functions can log even when imported without set_logger()
+# having run yet (e.g. under test or when reused as a library). logging.getLogger()
+# is a singleton keyed by name, so set_logger() configuring the same logger later
+# (handlers, level) applies to this exact object.
+logger = logging.getLogger(__name__)
+
 def same_origin(url, configured_url):
     requested = urlsplit(url)
     configured = urlsplit(configured_url)
@@ -709,7 +715,7 @@ def write_episode_nfo(episode_nfo_path, episode_root, media_title):
 
         return False
     
-def process_media(type, config, file_path, library_type, media_root, media_title, dry_run, force_overwrite, season_dir='', season_path=''):
+def process_media(type, config, file_path, library_type, media_root, media_title, dry_run, force_overwrite, season_dir='', season_path='', baseurl=None, headers=None):
     file_exists = os.path.exists(season_path or file_path)
     if not os.path.exists(os.path.dirname(season_path or file_path)):
         logger.verbose(f'[FAILURE] {type} for {media_title} skipped because {os.path.dirname(season_path or file_path)} is not exist')
@@ -856,7 +862,7 @@ def resolve_base_settings(args, config):
     path_mapping = config.get('Path mapping', [])
     logger.debug(f'path_mapping: {path_mapping}')
 
-    return token, library_names, blacklists, path_mapping
+    return baseurl, token, library_names, blacklists, path_mapping
 
 def build_export_flags(args, config):
     option_map = {
@@ -945,7 +951,7 @@ def resolve_library_type(library_type, check_music):
 
     return library_type, 'Directory', check_music
 
-def fetch_library_root(library, library_root, check_music_state):
+def fetch_library_root(library, library_root, check_music_state, baseurl, headers):
     suffix = 'all' if check_music_state == 0 else 'albums'
     url = urljoin(baseurl, f"/library/sections/{library.get('key')}/{suffix}")
     response = get_request(url, headers=headers)
@@ -973,7 +979,7 @@ def update_summary(summary, category, status):
 
     summary[key] += 1
 
-def export_episode_nfos(meta_url, path_mapping, config, media_title, dry_run, force_overwrite, summary):
+def export_episode_nfos(meta_url, path_mapping, config, media_title, dry_run, force_overwrite, summary, headers):
     try:
         meta_season_url = urljoin(meta_url + '/', 'children')
         season_resp = get_request(meta_season_url, headers=headers)
@@ -1005,13 +1011,13 @@ def export_episode_nfos(meta_url, path_mapping, config, media_title, dry_run, fo
                     continue
                 episode_nfo_path = map_media_path(os.path.splitext(episode_path)[0] + '.nfo', path_mapping)
 
-                status = process_media('Episode NFO', config, episode_nfo_path, 'tvshow', episode_root, media_title, dry_run, force_overwrite)
+                status = process_media('Episode NFO', config, episode_nfo_path, 'tvshow', episode_root, media_title, dry_run, force_overwrite, headers=headers)
                 update_summary(summary, 'episode_nfo', status)
     except Exception as exc:
         logger.verbose(f'[FAILURE] Episode NFO for {media_title} failed: {exc}')
         summary['episode_nfo_failure'] += 1
 
-def export_season_posters(meta_url, media_path, fanart_path, config, meta_root, media_title, dry_run, force_overwrite, summary):
+def export_season_posters(meta_url, media_path, fanart_path, config, meta_root, media_title, dry_run, force_overwrite, summary, baseurl, headers):
     try:
         season_url = urljoin(f'{meta_url}/', 'children')
         season_response = get_request(season_url, headers=headers)
@@ -1034,13 +1040,13 @@ def export_season_posters(meta_url, media_path, fanart_path, config, meta_root, 
                 season_filename = f'season-{season_title}-cover.jpg'
 
             season_path = safe_output_path(media_path, season_filename)
-            status = process_media('Season Poster', config, fanart_path, 'tvshow', meta_root, media_title, dry_run, force_overwrite, season_dir, season_path)
+            status = process_media('Season Poster', config, fanart_path, 'tvshow', meta_root, media_title, dry_run, force_overwrite, season_dir, season_path, baseurl, headers)
             update_summary(summary, 'season_poster', status)
     except Exception as exc:
         logger.info(f'[FAILURE] Season poster for {media_title} failed: {exc}')
         summary['season_poster_failure'] += 1
 
-def process_content(content, library_root, library_type, args, config, path_mapping, exports, movie_filename_type, image_filename_type, dry_run, force_overwrite, summary):
+def process_content(content, library_root, library_type, args, config, path_mapping, exports, movie_filename_type, image_filename_type, dry_run, force_overwrite, summary, baseurl, headers):
     ratingkey = content.get('ratingKey')
     meta_url = urljoin(baseurl, f"/library/metadata/{ratingkey}")
     meta_response = get_request(meta_url, headers=headers)
@@ -1072,20 +1078,20 @@ def process_content(content, library_root, library_type, args, config, path_mapp
             update_summary(summary, 'nfo', status)
 
         if exports['export_episode_nfo'] and library_type == 'tvshow':
-            export_episode_nfos(meta_url, path_mapping, config, media_title, dry_run, force_overwrite, summary)
+            export_episode_nfos(meta_url, path_mapping, config, media_title, dry_run, force_overwrite, summary, headers)
 
         if exports['export_poster']:
-            status = process_media('Poster', config, poster_path, library_type, meta_root, media_title, dry_run, force_overwrite)
+            status = process_media('Poster', config, poster_path, library_type, meta_root, media_title, dry_run, force_overwrite, baseurl=baseurl, headers=headers)
             update_summary(summary, 'poster', status)
 
         if exports['export_fanart']:
-            status = process_media('Art', config, fanart_path, library_type, meta_root, media_title, dry_run, force_overwrite)
+            status = process_media('Art', config, fanart_path, library_type, meta_root, media_title, dry_run, force_overwrite, baseurl=baseurl, headers=headers)
             update_summary(summary, 'art', status)
 
         if exports['export_season_poster'] and library_type == 'tvshow':
-            export_season_posters(meta_url, media_path, fanart_path, config, meta_root, media_title, dry_run, force_overwrite, summary)
+            export_season_posters(meta_url, media_path, fanart_path, config, meta_root, media_title, dry_run, force_overwrite, summary, baseurl, headers)
 
-def process_library(library, args, config, path_mapping, exports, movie_filename_type, image_filename_type, dry_run, force_overwrite, check_music, library_result):
+def process_library(library, args, config, path_mapping, exports, movie_filename_type, image_filename_type, dry_run, force_overwrite, check_music, library_result, baseurl, headers):
     library_name = library.get('name')
     summary = create_library_result()
     library_result[library_name] = summary
@@ -1093,14 +1099,14 @@ def process_library(library, args, config, path_mapping, exports, movie_filename
     lib_type = library.get('type')
     library_type, library_root, updated_check_music = resolve_library_type(lib_type, check_music)
 
-    full_root = fetch_library_root(library, library_root, updated_check_music)
+    full_root = fetch_library_root(library, library_root, updated_check_music, baseurl, headers)
     library_contents = full_root.findall(library_root)
 
     with alive_bar(len(library_contents), monitor=True, elapsed=True, stats=False, receipt_text=True) as bar:
         bar.text(f'for {library_name}')
         for content in library_contents:
             try:
-                process_content(content, library_root, library_type, args, config, path_mapping, exports, movie_filename_type, image_filename_type, dry_run, force_overwrite, summary)
+                process_content(content, library_root, library_type, args, config, path_mapping, exports, movie_filename_type, image_filename_type, dry_run, force_overwrite, summary, baseurl, headers)
             except Exception as exc:
                 logger.verbose(f"[FAILURE] Skipping item (ratingKey={content.get('ratingKey')}) in {library_name} due to incomplete or unexpected Plex metadata: {exc}")
             bar()
@@ -1141,9 +1147,8 @@ def print_library_summary(library_result, exports):
 def main(args, log_name, config_dir=None):
     config = load_configuration(config_dir)
 
-    token, library_names, blacklists, path_mapping = resolve_base_settings(args, config)
+    baseurl, token, library_names, blacklists, path_mapping = resolve_base_settings(args, config)
 
-    global headers
     headers = {'X-Plex-Token': token}
     library_details = get_library_details(baseurl, headers, library_names, blacklists)
 
@@ -1172,6 +1177,8 @@ def main(args, log_name, config_dir=None):
             force_overwrite,
             check_music,
             library_result,
+            baseurl,
+            headers,
         )
 
     if not dry_run:

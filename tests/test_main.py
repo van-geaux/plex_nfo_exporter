@@ -430,8 +430,6 @@ class _FakeResponse200:
 
 def test_process_content_movie_without_media_part_does_not_raise(monkeypatch):
     monkeypatch.setattr(main, "logger", _FakeLogger(), raising=False)
-    monkeypatch.setattr(main, "baseurl", "http://plex.local", raising=False)
-    monkeypatch.setattr(main, "headers", {}, raising=False)
     monkeypatch.setattr(main, "get_request", lambda *a, **k: _FakeResponse200())
 
     meta_root = ET.fromstring('<Video ratingKey="1" title="No Media Part"/>')
@@ -465,6 +463,7 @@ def test_process_content_movie_without_media_part_does_not_raise(monkeypatch):
     main.process_content(
         content, "Video", "movie", args, {}, [], exports,
         "default", "default", False, False, summary,
+        "http://plex.local", {},
     )
 
     assert captured_file_titles == [None]
@@ -562,9 +561,9 @@ def test_resolve_base_settings_prefers_args_over_env_and_config(monkeypatch):
     args = _args(url="http://from-args", token="args-token")
     config = {"Base URL": "http://from-config", "Token": "config-token"}
 
-    token, library_names, blacklists, path_mapping = main.resolve_base_settings(args, config)
+    baseurl, token, library_names, blacklists, path_mapping = main.resolve_base_settings(args, config)
 
-    assert main.baseurl == "http://from-args"
+    assert baseurl == "http://from-args"
     assert token == "args-token"
 
 
@@ -576,9 +575,9 @@ def test_resolve_base_settings_falls_back_to_env_then_config(monkeypatch):
     args = _args()
     config = {"Base URL": "'http://from-config'", "Token": '"config-token"'}
 
-    token, *_ = main.resolve_base_settings(args, config)
+    baseurl, token, *_ = main.resolve_base_settings(args, config)
 
-    assert main.baseurl == "http://from-config"
+    assert baseurl == "http://from-config"
     assert token == "config-token"
 
 
