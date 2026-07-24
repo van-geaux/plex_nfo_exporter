@@ -2,7 +2,7 @@
 
 **Plex NFO Exporter** pulls metadata, posters, and background art out of Plex and writes them as `.nfo` and image files alongside your media, in a format other media servers like Jellyfin can read directly.
 
-> **This project is AI-assisted.** Development is done in collaboration with Claude (Anthropic), which has contributed code, tests, and documentation alongside the maintainer. Review changes accordingly if that matters for your use case.
+> **This project was previously developed manually and is now AI-assisted.** Development has shifted to working alongside AI coding assistants, which contribute code, tests, and documentation alongside the maintainer. Review changes accordingly if that matters for your use case.
 
 By default, the terminal only shows a summary; full detail goes to the log file:
 ![alt text](static/image.png)
