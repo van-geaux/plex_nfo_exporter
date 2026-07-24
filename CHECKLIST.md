@@ -167,8 +167,7 @@ and ordering; this file tracks item-by-item status. Migrated from the former
       `gh auth status` shows an invalid/expired token in this environment
       (`gh auth login` needed) — needs the user to re-authenticate `gh` or
       check the GitHub UI directly.
-- [ ] Update the README only where implemented behavior or documented
-      procedures changed. Not done this session — no end-user-facing
-      behavior changed (bug fixes, tests, CI, and an internal refactor
-      only); flag for the user if the AI-assisted note mentioned in
-      `docs/handover.md` is still wanted.
+- [x] Update the README only where implemented behavior or documented
+      procedures changed. Reworded for readability and added an opening
+      note that the project is AI-assisted, per the user's explicit
+      request; otherwise no behavior changed so no other content changed.
