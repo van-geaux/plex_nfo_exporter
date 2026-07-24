@@ -186,8 +186,15 @@ CONFIG_PLACEHOLDER = dedent("""
     Movie NFO name type: default
     Movie Poster/art name type: default
 
-    # Leave this empty if you use docker volume mapping i.e. Path mapping: []
-    # change/add path mapping if plex path is different from local (script) path
+    # Leave this fully empty (Path mapping: []) only if EVERY Plex library
+    # root is mounted at the identical path inside this container.
+    # Otherwise, list EVERY Plex library root here, one entry per root -
+    # if a root is Plex-path == local-path already (e.g. because you mount
+    # it the same way for both Plex and this container), still add it with
+    # matching 'plex'/'local' values. Once this list has even one entry,
+    # any Plex media path that doesn't match one of them is rejected
+    # instead of silently passed through, to stop unmapped/unexpected
+    # paths from being treated as safe write targets.
     Path mapping: [
         {
             'plex': '/data_media',

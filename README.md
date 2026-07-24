@@ -77,6 +77,26 @@ PLEX_URL='http://plex_ip:plex_port' # i.e. http://192.168.1.2:32400 or https://p
 PLEX_TOKEN='super-secret-token'
 ```
 
+### Path Mapping
+
+`Path mapping` in `config.yml` tells the exporter how to translate a file path as *Plex* reports it into the path as *this container* sees it. **Every Plex library root needs an entry once you have any entries at all** — including a root that's mounted at the exact same path for both Plex and this container. For example, if you mount the same host folder at `/synology` in both Plex and this container, you still need:
+```yaml
+Path mapping: [
+    {
+        'plex': '/synology',
+        'local': '/synology'
+    }
+]
+```
+
+This is deliberate: once `Path mapping` isn't empty, any reported path that doesn't match one of your entries is rejected rather than silently trusted, so an unexpected or unmapped path can never be treated as a safe location to write NFO/image files into. If you skip a root, exports for that library will fail with an error like:
+```
+Plex media path is outside configured mappings: '/synology/Some Show (2022)'
+```
+The fix is always the same — add the missing root to `Path mapping`, even if `plex` and `local` are identical.
+
+The only time you can leave `Path mapping` completely empty (`Path mapping: []`) is when *every* Plex library root is mounted at the identical path in this container — in that case there's nothing to translate and no entries are required.
+
 ### Running Manually
 
 1. **Download and prepare the script**
