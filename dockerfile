@@ -10,8 +10,8 @@ RUN mkdir -p logs
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-ADD https://github.com/aptible/supercronic/releases/download/v0.2.29/supercronic-linux-amd64 /tmp/supercronic
-RUN echo "87625cd179eff21226f0be6f2f47dd357037064598e6c1f9ffcbd0335d402bbd  /tmp/supercronic" | sha256sum -c - \
+ADD https://github.com/aptible/supercronic/releases/download/v0.2.48/supercronic-linux-amd64 /tmp/supercronic
+RUN echo "88c1b66b94c486f972fdd1a4d1f901e3e75ff04f749cddd60c5db573e3a33c6c  /tmp/supercronic" | sha256sum -c - \
     && install -m 0755 /tmp/supercronic /usr/local/bin/supercronic \
     && rm /tmp/supercronic
 

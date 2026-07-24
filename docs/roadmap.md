@@ -73,6 +73,15 @@ Dependabot for the final alert state, review the complete diff, and update
 the README only where implemented behavior or documented procedures actually
 changed.
 
+All of the above that don't require a live Plex server or repository write
+access are done: full test suite (68 passed), `pip-audit` and a
+`trivy image` container scan (which caught and fixed 18 CVEs, 2 CRITICAL, in
+the pinned Supercronic binary — see `CHECKLIST.md`), and an end-to-end
+Docker run against a local fake Plex server verifying config/`.env`
+loading, `RUN_IMMEDIATELY`, dry-run mode, and a real NFO export. Still
+blocked: re-querying Dependabot (needs a re-authenticated `gh` or the GitHub
+UI) and the README AI-assisted note (user-owned per `docs/handover.md`).
+
 ## Recommended execution order
 
 1. Phase 1 — dependency upgrades

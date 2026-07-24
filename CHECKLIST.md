@@ -104,6 +104,13 @@ and ordering; this file tracks item-by-item status. Migrated from the former
 - [x] Verify the Supercronic binary download by checksum in `dockerfile`.
 - [x] Review and tighten `.github/workflows/stale.yml` permissions; pin
       `actions/stale` to a commit hash.
+- [x] Upgrade Supercronic `v0.2.29` → `v0.2.48` in `dockerfile`. A container
+      vulnerability scan (`aquasec/trivy`) found the pinned `v0.2.29` binary
+      was built against Go stdlib `v1.21.5` with 18 known CVEs (2 CRITICAL,
+      e.g. CVE-2024-24790). `v0.2.48` clears all of them (confirmed via a
+      before/after Trivy scan). New sha256 verified against the checksum
+      published in the GitHub release notes (sha1sum
+      `016b7c9aebfc8d9fd9526e8ba33b191fc524485f`, matched independently).
 
 ## Network and remote-input hardening
 
@@ -133,12 +140,32 @@ and ordering; this file tracks item-by-item status. Migrated from the former
 - [x] Add Docker build verification to CI (`docker-build` job builds the
       image from `dockerfile`; verified locally with `docker build`).
 
-## Release follow-up (not started)
+## Release follow-up
 
-- [ ] Run the full test suite in a clean environment once one exists.
-- [ ] Run dependency and container vulnerability scans.
-- [ ] Build and start the Docker image; verify config, `.env`, cron
-      scheduling, dry-run mode, and export behavior end-to-end.
-- [ ] Re-query GitHub Dependabot and record the final alert state.
+- [x] Run the full test suite in a clean environment once one exists. Ran
+      via `.venv` (created fresh this session) and via the CI workflow's
+      `test` job steps locally: 68 passed.
+- [x] Run dependency and container vulnerability scans. `pip-audit -r
+      requirements.txt`: no known vulnerabilities. `aquasec/trivy image`
+      against the built container: found and fixed 18 CVEs (2 CRITICAL) in
+      the pinned Supercronic binary (see supply-chain section above);
+      remaining findings are Debian OS packages and setuptools' vendored
+      `jaraco.context`/`wheel`, outside this project's `requirements.txt`.
+- [x] Build and start the Docker image; verify config, `.env`, cron
+      scheduling, dry-run mode, and export behavior end-to-end. Verified
+      against a local fake Plex HTTP server (not a real Plex instance,
+      which this environment doesn't have access to): `RUN_IMMEDIATELY=true`
+      triggers an immediate export that correctly reads the mounted
+      `config.yml`/`.env`, writes a real NFO to the mounted media volume
+      with correct content, writes to the mounted log volume, and
+      supercronic starts and shuts down cleanly; `DRY_RUN=true` logs the
+      intended action without writing any file.
+- [!] Re-query GitHub Dependabot and record the final alert state. Blocked:
+      `gh auth status` shows an invalid/expired token in this environment
+      (`gh auth login` needed) — needs the user to re-authenticate `gh` or
+      check the GitHub UI directly.
 - [ ] Update the README only where implemented behavior or documented
-      procedures changed.
+      procedures changed. Not done this session — no end-user-facing
+      behavior changed (bug fixes, tests, CI, and an internal refactor
+      only); flag for the user if the AI-assisted note mentioned in
+      `docs/handover.md` is still wanted.
