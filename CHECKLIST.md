@@ -46,16 +46,24 @@ and ordering; this file tracks item-by-item status. Migrated from the former
 
 ## Testability
 
-- [ ] Establish a test runner and layout for `main.py` (see `docs/testing.md`
-      — there is currently no working automated suite).
-- [ ] Remove or restore the stale `tests/test_service.py` reference to a
-      nonexistent `service` package (leftover from an abandoned effort; see
-      `docs/testing.md`).
+- [x] Establish a test runner and layout for `main.py` (`tests/test_main.py`,
+      `pytest`, see `docs/testing.md`).
+- [x] Remove the stale `tests/test_service.py` reference to a nonexistent
+      `service` package (leftover from an abandoned effort; confirmed via
+      `git log` that no `service` module ever existed to restore it
+      against).
+- [x] Add unit tests for URL construction and request handling
+      (`same_origin`, `get_request`, `response_content`,
+      `parse_xml_response`).
+- [x] Add unit tests for path mapping and filename generation
+      (`map_media_path`, `safe_output_path`, `get_file_path`,
+      `sanitize_filename`).
+- [x] Add unit tests for XML/NFO output (`add_xml_element` and the NFO
+      section writers).
 - [ ] Add unit tests for configuration loading and environment substitution.
-- [ ] Add unit tests for URL construction and request handling.
-- [ ] Add unit tests for path mapping and filename generation.
-- [ ] Add unit tests for XML/NFO output.
-- [ ] Add unit tests for incomplete Plex responses.
+- [ ] Add unit tests for incomplete Plex responses (blocked on the
+      `Media/Part` guard and defensive-parsing items in Phase 4 below —
+      write the tests alongside those fixes).
 
 ## Dependency and supply-chain hardening
 

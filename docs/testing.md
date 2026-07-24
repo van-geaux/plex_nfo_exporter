@@ -1,48 +1,63 @@
 # Testing
 
-## Current state: no working automated test suite
+## Automated tests
 
-`tests/test_service.py` exists but **cannot currently be collected or run**:
+`tests/test_main.py` is a `pytest` suite that imports `main` directly and
+unit-tests its pure helper functions — no live Plex server required:
 
-- It imports `from service import app as app_module` and
-  `from service.jobs import JobManager, JobStatus` — there is no `service`
-  package anywhere in this repository.
-- It depends on `fastapi` (via `fastapi.testclient.TestClient`) and `pytest`,
-  neither of which is listed in `requirements.txt`.
+- `sanitize_filename`, `get_file_path` (all naming-mode combinations)
+- `map_media_path`, `safe_output_path` (path-mapping and traversal/escape
+  guards)
+- `same_origin`, `get_request` (origin enforcement, timeout, redirect
+  disabling — `requests.get` is monkeypatched)
+- `response_content`, `parse_xml_response` (size limits, malformed-XML
+  handling)
+- `resolve_library_type` (movie/show/music artist-album alternation)
+- `add_xml_element` and the NFO section writers (`write_simple_fields`,
+  `write_tag_collections`, `write_ratings_section`, `write_people_sections`,
+  `write_roles_section`, `write_agent_ids_section`), each driven by a
+  hand-built `xml.etree.ElementTree` element standing in for Plex metadata.
 
-This appears to be leftover coverage from an abandoned web-service/job-runner
-effort that was never merged, not a test of the actual `main.py` CLI. It is
-tracked for cleanup in `CHECKLIST.md` ("Remove or restore the stale
-`tests/test_service.py` reference to a nonexistent `service` package").
-**Do not treat a green run of this file as verification of anything** — as of
-this writing it fails to import before any test runs, and there is currently no
-`service` module to restore it against.
+Run it with:
 
-Until that item is resolved, `main.py` has no automated regression coverage at
-all. Changes must be verified manually (below) and, where practical, backed by
-new targeted tests introduced alongside the change (see "Adding tests" below).
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+pytest tests/ -v
+```
 
-## Manual verification (current practice)
+(`requirements-dev.txt` layers `pytest` on top of `requirements.txt`; the
+runtime dependency list is unaffected.)
 
-1. **Syntax / import check** — install dependencies, then confirm the module
-   imports cleanly:
-   ```bash
-   pip install -r requirements.txt
-   python -c "import main"
-   ```
-2. **Dry run against a real Plex server** — set `DRY_RUN=true` (or `--dry-run`)
+Functions that depend on module-level globals (`baseurl`, `headers`,
+`logger`) or perform live HTTP/filesystem I/O end-to-end — `process_media`,
+`process_content`, `process_library`, `download_image`, `write_nfo`,
+`write_episode_nfo` — are not yet covered by unit tests; see
+`CHECKLIST.md`'s testability items (reducing global state, adding coverage
+for incomplete Plex responses) for what's still open.
+
+`tests/test_service.py`, which referenced a nonexistent `service` package
+from an abandoned web-service/job-runner effort, has been removed — there was
+nothing in the repo or git history to restore it against.
+
+## Manual verification
+
+Automated coverage above is unit-level only; still verify manually for
+anything that touches live Plex behavior:
+
+1. **Dry run against a real Plex server** — set `DRY_RUN=true` (or `--dry-run`)
    so the script logs every action it *would* take without writing files:
    ```bash
    python main.py --dry-run --log-level VERBOSE
    ```
    Check the console/log output for the expected `[ADDED]`/`[UPDATED]`/
    `[SKIPPED]`/`[FAILURE]` lines for the libraries and export types you changed.
-3. **Live run against a scratch/test library** — point `config.yml`'s
+2. **Live run against a scratch/test library** — point `config.yml`'s
    `Libraries` (or `--library`) at a small, disposable Plex library (or use
    `Blacklist` to exclude production libraries), then run without `--dry-run`
    and inspect the generated `.nfo`/`.jpg` files and the printed summary
    counts.
-4. **Docker build** — verify the image still builds and the entrypoint script
+3. **Docker build** — verify the image still builds and the entrypoint script
    is valid after `dockerfile`/`entrypoint.sh` changes:
    ```bash
    docker build -t plex-nfo-exporter:test .
@@ -50,21 +65,9 @@ new targeted tests introduced alongside the change (see "Adding tests" below).
 
 ## Adding tests
 
-There is no established test runner or layout yet (tracked as
-`CHECKLIST.md` → "Establish a test runner and layout for `main.py`"). If you
-add tests before that item lands:
-
-- Add `pytest` to `requirements.txt` (or a separate dev-requirements file) and
-  a `tests/` module that imports `main` directly rather than shelling out.
-- Favor unit-testing the pure helper functions that don't depend on the
-  `baseurl`/`headers`/`logger` globals or live HTTP calls: `sanitize_filename`,
-  `map_media_path`, `safe_output_path`, `get_file_path`, `same_origin`,
-  `resolve_library_type`, and the NFO section writers (`write_simple_fields`,
-  `write_tag_collections`, `write_people_sections`, etc., called with a hand-built
-  `xml.etree.ElementTree` element standing in for Plex metadata).
+- Add new tests to `tests/test_main.py` (or a new `tests/test_*.py` module)
+  by importing `main` directly, following the pattern above.
 - Functions that read the module globals (`get_request`, `process_media`,
-  `main`) will need those globals set or monkeypatched until
+  `main`) need those globals set or monkeypatched (see
+  `test_get_request_rejects_cross_origin` for the pattern) until
   `CHECKLIST.md`'s global-state cleanup item is done.
-- Do not name new tests `test_service.py` unless you are genuinely restoring a
-  `service` module — reuse of that filename without the module will reintroduce
-  the current broken-import problem.

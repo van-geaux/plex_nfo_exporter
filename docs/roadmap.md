@@ -48,14 +48,16 @@ NFO naming mode.
 
 ## Phase 5 — Testability and maintainability
 
-Establish a real test runner and layout for `main.py` (there is currently
-none — see `docs/testing.md`), and add unit coverage for configuration
-loading, URL/request construction, path mapping and filename generation,
-XML/NFO output, and incomplete-response handling. Reduce reliance on
+A real test runner and layout now exists (`tests/test_main.py`, `pytest` —
+see `docs/testing.md`), with unit coverage for URL/request construction, path
+mapping and filename generation, and XML/NFO output. The stale
+`tests/test_service.py` reference to a nonexistent `service` package has
+been removed — nothing in the repo or git history to restore it against.
+Remaining: unit coverage for configuration loading/environment substitution
+and for incomplete-response handling (write the latter alongside the Phase 4
+`Media/Part` guard and defensive-parsing fixes), and reducing reliance on
 module-level globals (`logger`, `headers`, `baseurl`) so core functions can
-be tested and reused without a live Plex connection. Resolve the stale
-`tests/test_service.py` reference to a nonexistent `service` package —
-either restore what it was testing or remove it.
+be tested and reused without a live Plex connection.
 
 ## Phase 6 — Final verification and release follow-up
 
