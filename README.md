@@ -21,8 +21,8 @@ By default, the terminal only shows a summary; full detail goes to the log file:
 - Exports Plex media metadata into `.nfo` files, matching Plex's current movie/TV agents as well as the [Hama agent](https://github.com/ZeroQI/Hama.bundle).
 - Multiple naming formats for exports, e.g. poster as `poster.jpg` or `{filename}_poster.jpg`.
 - Writes files straight into the media directory, so other media servers can pick them up immediately.
-- **Never refreshes or modifies Plex's own library metadata** — read-only against Plex.
-- Choose exactly which metadata fields to export (title, tagline, plot, year, etc.), and which libraries to process — or export everything.
+- **Never refreshes or modifies Plex's own library metadata**, read-only against Plex.
+- Choose exactly which metadata fields to export (title, tagline, plot, year, etc.), and which libraries to process, or export everything.
 - Supports path mapping when Plex and the exporter see different filesystem layouts.
 - Works with **movies**, **TV shows**, and **music** libraries, including multiple movie titles living in the same directory.
 

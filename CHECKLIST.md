@@ -97,11 +97,19 @@ and ordering; this file tracks item-by-item status. Migrated from the former
 - [x] Upgrade `python-dotenv` to `1.2.2`.
 - [x] Run dependency consistency checks (`pip check`) and a vulnerability scan
       against `requirements.txt`.
-- [!] Recheck Dependabot alerts and confirm the Pillow/urllib3/Requests/
-      python-dotenv alerts close. Blocked: same `gh` auth issue as the
-      Phase 6 Dependabot re-query below — `pip-audit` against current pins
-      shows no known vulnerabilities as a proxy, but the actual Dependabot
-      alert states need the user's GitHub access to confirm/close.
+- [-] Recheck Dependabot alerts and confirm the Pillow/urllib3/Requests/
+      python-dotenv alerts close. `gh auth login`/`gh auth refresh -s
+      workflow` re-authenticated this session, and all 13 local commits
+      (including the dependency pins) were pushed to `origin/main` for the
+      first time — previously the alerts were open because Dependabot was
+      scanning the old, unpinned `requirements.txt` still on `origin/main`.
+      As of this push, alerts still show `open` with unchanged timestamps
+      (`gh api repos/van-geaux/plex_nfo_exporter/dependabot/alerts`) —
+      GitHub's re-scan is async and hadn't completed yet as of this
+      session. `pip-audit` against the current pins already shows no known
+      vulnerabilities; re-run the `gh api` query above (or check
+      https://github.com/van-geaux/plex_nfo_exporter/security/dependabot)
+      after GitHub's scan catches up to confirm alerts closed.
 - [x] Pin `alive-progress` to `3.3.0`.
 - [x] Pin the Docker base image (`python:3.11-slim`) by digest.
 - [x] Verify the Supercronic binary download by checksum in `dockerfile`.
@@ -163,10 +171,12 @@ and ordering; this file tracks item-by-item status. Migrated from the former
       with correct content, writes to the mounted log volume, and
       supercronic starts and shuts down cleanly; `DRY_RUN=true` logs the
       intended action without writing any file.
-- [!] Re-query GitHub Dependabot and record the final alert state. Blocked:
-      `gh auth status` shows an invalid/expired token in this environment
-      (`gh auth login` needed) — needs the user to re-authenticate `gh` or
-      check the GitHub UI directly.
+- [-] Re-query GitHub Dependabot and record the final alert state. `gh`
+      re-authenticated and `main` pushed to `origin` this session (see the
+      note above in the dependency/supply-chain section) — waiting on
+      GitHub's async re-scan to actually close the alerts. Re-check
+      `gh api repos/van-geaux/plex_nfo_exporter/dependabot/alerts` or the
+      Security tab once it's caught up.
 - [x] Update the README only where implemented behavior or documented
       procedures changed. Reworded for readability and added an opening
       note that the project is AI-assisted, per the user's explicit
