@@ -78,6 +78,10 @@ changed.
 5. Phase 5 — testability
 6. Phase 6 — final verification and release follow-up
 
-Phases 1–4 are complete; see `CHECKLIST.md` for the remaining open items in
-Phase 5 (config/env test coverage, reducing module-level globals) and Phase
-6 (CI, final verification and release follow-up).
+Phases 1–4 are complete. Phase 5's test-coverage items (config/env
+substitution, incomplete-response handling) are done; a CI workflow
+(`.github/workflows/ci.yml`) now runs the test suite, dependency
+consistency/vulnerability checks, and a Docker build on every push/PR. See
+`CHECKLIST.md` for the remaining open items: reducing module-level globals
+(Phase 5) and release follow-up (Phase 6 — clean-environment run,
+end-to-end Docker verification, Dependabot re-query, README update).

@@ -108,10 +108,16 @@ and ordering; this file tracks item-by-item status. Migrated from the former
 
 ## CI
 
-- [ ] Add a CI workflow for dependency installation and syntax checks.
-- [ ] Add the automated test suite to CI once it exists.
-- [ ] Add dependency vulnerability scanning to CI.
-- [ ] Add Docker build verification to CI.
+- [x] Add a CI workflow for dependency installation and syntax checks
+      (`.github/workflows/ci.yml`, `test` job: `pip install`, `pip check`,
+      `python -m py_compile main.py`).
+- [x] Add the automated test suite to CI once it exists (`test` job runs
+      `pytest -q`).
+- [x] Add dependency vulnerability scanning to CI (`dependency-audit` job
+      runs `pip-audit -r requirements.txt`; verified locally with no known
+      vulnerabilities against current pins).
+- [x] Add Docker build verification to CI (`docker-build` job builds the
+      image from `dockerfile`; verified locally with `docker build`).
 
 ## Release follow-up (not started)
 
