@@ -1,32 +1,30 @@
 # Plex NFO Exporter
 
-**Plex NFO Exporter** is a script that extracts metadata, posters, and background art from Plex and generates compatible files for use with other media servers like Jellyfin.  
+**Plex NFO Exporter** pulls metadata, posters, and background art out of Plex and writes them as `.nfo` and image files alongside your media, in a format other media servers like Jellyfin can read directly.
 
-By default, only a summary is shown in the terminal (detailed in log file):
+> **This project is AI-assisted.** Development is done in collaboration with Claude (Anthropic), which has contributed code, tests, and documentation alongside the maintainer. Review changes accordingly if that matters for your use case.
+
+By default, the terminal only shows a summary; full detail goes to the log file:
 ![alt text](static/image.png)
 
 <details>
    <summary>Verbose, shows detailed processes:</summary>
 
    ![alt text](static/image-1.png)
-   
+
 </details>
 
 ---
 
 ## Features
-- Extract media metadata from Plex into `.nfo` files.
-- Multiple naming formats to export to i.e. poster as `poster.jpg` or `{filename}_poster.jpg`.
-- Save files in the media directory for easy use with other media servers.
-- **Does not refresh Plex library metadata** during the export process.
-- Flexible options:
-  - Choose what metadata to export (e.g., title, tagline, plot, year, etc.).
-  - Select specific libraries to process.
-  - Export all metadata from Plex if needed.
-- Support for path mapping between separate Plex and library servers.
-- Compatible with **movies**, **TV shows**, and **music** libraries.
-- Supports Plex's latest movie and TV agents, as well as [Hama agent](https://github.com/ZeroQI/Hama.bundle).
-- Supports multiple movie titles in one directory.
+
+- Exports Plex media metadata into `.nfo` files, matching Plex's current movie/TV agents as well as the [Hama agent](https://github.com/ZeroQI/Hama.bundle).
+- Multiple naming formats for exports, e.g. poster as `poster.jpg` or `{filename}_poster.jpg`.
+- Writes files straight into the media directory, so other media servers can pick them up immediately.
+- **Never refreshes or modifies Plex's own library metadata** — read-only against Plex.
+- Choose exactly which metadata fields to export (title, tagline, plot, year, etc.), and which libraries to process — or export everything.
+- Supports path mapping when Plex and the exporter see different filesystem layouts.
+- Works with **movies**, **TV shows**, and **music** libraries, including multiple movie titles living in the same directory.
 
 ---
 
@@ -51,15 +49,6 @@ docker run --rm \
   ghcr.io/van-geaux/plex_nfo_exporter:latest
 ```
 
-After first deployment, fill the generated `config.yml` and `.env` before restarting it again.
-`.env` file will only be generated if you are not using `PLEX_URL` and `PLEX_TOKEN` environment variables
-
-For the `.env`, fill it with:
-```yaml
-PLEX_URL='http://plex_ip:plex_port' # i.e. http://192.168.1.2:32400 or https://plex.yourdomain.tld if using proxy
-PLEX_TOKEN='super-scecret-token'
-```
-
 #### Docker Compose Example
 
 ```yaml
@@ -82,31 +71,28 @@ services:
       - /volume1/data/media:/data_media # left side local path, right side plex path. YOU NEED TO SET THIS EVEN IF BOTH ARE THE SAME
 ```
 
-After first deployment, fill the generated `config.yml` and `.env` before restarting it again.
-`.env` file will only be generated if you are not using `PLEX_URL` and `PLEX_TOKEN` environment variables
-
-For the `.env`, fill it with:
+After the first deployment, fill in the generated `config.yml` and `.env` before restarting the container. The `.env` file is only generated if you aren't already supplying `PLEX_URL`/`PLEX_TOKEN` as environment variables:
 ```yaml
 PLEX_URL='http://plex_ip:plex_port' # i.e. http://192.168.1.2:32400 or https://plex.yourdomain.tld if using proxy
-PLEX_TOKEN='super-scecret-token'
+PLEX_TOKEN='super-secret-token'
 ```
 
 ### Running Manually
 
-1. **Download and Prepare the Script**  
+1. **Download and prepare the script**
    Clone or download the repository, ensuring the following files are included:
    - `config.yml` (will create if not exists)
    - `.env` (will create if not exists)
-   - `main.py`  
-   - `requirements.txt`  
+   - `main.py`
+   - `requirements.txt`
 
-2. **Configure the Script**  
+2. **Configure the script**
    Edit `config.yml` and `.env` to include your desired settings and credentials.
 
-3. **Install Python**  
-   Install Python (tested with Python 3.9–3.11).  
+3. **Install Python**
+   Install Python (tested with Python 3.9–3.11).
 
-4. **Set Up the Environment**  
+4. **Set up the environment**
    Open a terminal and navigate to the script directory:
    ```bash
    cd /your_directory/plex_nfo_exporter
@@ -114,28 +100,24 @@ PLEX_TOKEN='super-scecret-token'
 
    (Optional) Create and activate a virtual environment:
    ```bash
-   python -m venv env  
-   env\Scripts\activate    # Windows  
+   python -m venv env
+   env\Scripts\activate    # Windows
    source env/bin/activate # macOS/Linux
    ```
 
-5. **Install Dependencies**
-   Install the required Python packages:
+5. **Install dependencies**
    ```bash
    pip install -r requirements.txt
    ```
 
-6. **Run the Script**
-   Execute the script:
+6. **Run the script**
    ```bash
    python main.py
    ```
 
 ### Command-Line Options
 
-The command line options will override the setting on `config.yml`, useful to do a customized run.
-
-If a flag is not provided, the script will use the value from the config file for that option, if available.
+Command-line flags override the corresponding `config.yml` setting for that run. If a flag isn't provided, the script falls back to the config file value.
 
 #### Connection Options
 
@@ -148,16 +130,16 @@ If a flag is not provided, the script will use the value from the config file fo
 
 | Flag              | Description                                                            |
 |-------------------|------------------------------------------------------------------------|
-| `--library`, `-l` | One or more library names to process (e.g. Movies, TV Shows). If a library name contains spaces, wrap it in quotes (e.g. "TV Shows").        |
-| `--title`, `-t`   | One or more specific media titles to process. The script does not perform a search—it scans each item in the library and processes it if the title matches one in the provided list. If a title contains spaces, wrap it in quotes (e.g. "Some Movie").                           |
+| `--library`, `-l` | One or more library names to process (e.g. Movies, TV Shows). Wrap names containing spaces in quotes (e.g. `"TV Shows"`). |
+| `--title`, `-t`   | One or more specific media titles to process. This doesn't perform a search — it scans every item in the library and processes it if the title matches one in the provided list. Wrap titles containing spaces in quotes (e.g. `"Some Movie"`). |
 
-####  Export Settings
+#### Export Settings
 
 | Flag                | Description                                                   |
 |---------------------|---------------------------------------------------------------|
 | `--nfo-name-type`   | Naming style for NFO files: `default`, `title`, or `filename` |
 | `--image-name-type` | Naming style for images: `default`, `title`, or `filename`    |
-| `--force-overwrite`, `-f` | Overwrite files without checking server metadata; overrides config.yml setting. |
+| `--force-overwrite`, `-f` | Overwrite files without checking server metadata; overrides `config.yml`. |
 
 #### Export Toggles
 
@@ -176,40 +158,18 @@ Each export option has a pair of flags — one to enable, one to disable.
 | Flag          | Description                                                                                         |
 |---------------|-----------------------------------------------------------------------------------------------------|
 | `--dry-run`   | Simulate actions without writing any files                                                          |
-| `--log-level` | Set the logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`, or `VERBOSE`). Defaults to `INFO`. Use `VERBOSE` to print detailed processing instead of only summary. |
-   
-## Features and Limitations
-
-1. **Supported Plex Agents**
-   - Compatible with Plex's new TV and movie agents.
-   - Detects Hama agent and other agents to set metadata source IDs accordingly.
-
-2. **Metadata Export Options**
-   - Choose specific metadata fields to export.
-   - Defaults include title, tagline, plot, year, and metadata agent IDs.
-
-3. **File Organization**
-   - Saves .nfo files as movie.nfo, tvshow.nfo, artist.nfo, album.nfo or other naming schemes as needed.
-   - Exports active poster and fanart images as poster.jpg and fanart.jpg.
-
-4. **Sync Across Servers**
-   - Ensures that Plex and Jellyfin display the same library metadata, images, and media names.
-
-5. **Docker Image**
-   - Docker image available at `ghcr.io/van-geaux/plex_nfo_exporter:latest`.
+| `--log-level` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`, or `VERBOSE`). Defaults to `INFO`. Use `VERBOSE` to print detailed processing instead of only a summary. |
 
 ## Background
 
-- **About Me:**  
-   I'm not a developer by trade, but I manage Plex and Jellyfin to enjoy both convenience and flexibility.  
-   My primary library is anime in Plex using the Hama agent with romaji names.
+- **About me**
+  I'm not a developer by trade, but I manage both Plex and Jellyfin to get the best of convenience and flexibility. My primary library is anime in Plex, using the Hama agent with romaji names.
 
-- **Why This Script?**  
-   I needed a tool to sync Plex and Jellyfin libraries, especially for anime with custom posters and art.  
-   Existing tools either require a full library refresh (e.g., Lambda) or work in reverse (e.g., XBMC Importer).
+- **Why this script?**
+  I needed a way to keep Plex and Jellyfin libraries in sync, especially for anime with custom posters and art. Existing tools either required a full library refresh (e.g. Lambda) or worked in the opposite direction (e.g. XBMC Importer).
 
-- **Kometa Integration:**  
-   I use Kometa to beautify posters, which works perfectly with this script.
+- **Kometa integration**
+  I use [Kometa](https://kometa.wiki/) to beautify posters, which works perfectly alongside this script.
 
 ## Future Plans
 
