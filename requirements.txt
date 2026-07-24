@@ -1,7 +1,7 @@
-pillow==10.4.0
+pillow==12.3.0
 psutil==6.0.0
-python-dotenv==1.0.1
+python-dotenv==1.2.2
 PyYAML==6.0.1
-requests==2.32.3
-urllib3==2.2.2
-alive-progress
+requests==2.34.2
+urllib3==2.7.0
+alive-progress==3.3.0

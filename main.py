@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from io import BytesIO
 from pathlib import Path
 from PIL import Image
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 from textwrap import dedent
 
 import argparse
@@ -18,6 +18,49 @@ import requests
 import sys
 import xml.etree.ElementTree as ET
 import yaml
+
+REQUEST_TIMEOUT = (10, 60)
+MAX_XML_RESPONSE_BYTES = 50 * 1024 * 1024
+MAX_IMAGE_RESPONSE_BYTES = 50 * 1024 * 1024
+MAX_IMAGE_PIXELS = 100_000_000
+
+def same_origin(url, configured_url):
+    requested = urlsplit(url)
+    configured = urlsplit(configured_url)
+    return (
+        requested.scheme.lower() == configured.scheme.lower()
+        and requested.hostname.lower() == configured.hostname.lower()
+        and requested.port == configured.port
+    )
+
+def get_request(url, headers=None, **kwargs):
+    """Perform a same-origin GET request with bounded times and no retries."""
+    configured_url = globals().get('baseurl')
+    if configured_url and not same_origin(url, configured_url):
+        raise ValueError(f'Refusing request outside configured Plex origin: {url}')
+
+    kwargs['allow_redirects'] = False
+    return requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT, **kwargs)
+
+def response_content(response, max_bytes=MAX_XML_RESPONSE_BYTES):
+    content_length = response.headers.get('Content-Length')
+    try:
+        if content_length is not None and int(content_length) > max_bytes:
+            raise ValueError(f'Response exceeds {max_bytes} byte limit')
+    except ValueError as exc:
+        if str(exc).startswith('Response exceeds'):
+            raise
+
+    content = response.content
+    if len(content) > max_bytes:
+        raise ValueError(f'Response exceeds {max_bytes} byte limit')
+    return content
+
+def parse_xml_response(response):
+    try:
+        return ET.fromstring(response_content(response))
+    except ET.ParseError as exc:
+        raise ValueError('Invalid Plex XML response') from exc
 
 def resolve_config_dir():
     if os.path.isdir('/app/config'):
@@ -261,13 +304,13 @@ def fallback_response(url, token):
             'X-Plex-Container-Size': str(container_size)
         }
         
-        response = requests.get(url, headers=fallback_headers)
+        response = get_request(url, headers=fallback_headers)
 
         if response.status_code != 200:
             logger.error(f"Error: {response.status_code}")
             break
         
-        root = ET.fromstring(response.content)
+        root = parse_xml_response(response)
 
         if full_root is None:
             full_root = root
@@ -290,10 +333,10 @@ def get_library_details(plex_url:str, headers:dict, library_names:list, blacklis
     library_details = []
     if plex_url:
         url = urljoin(plex_url, 'library/sections')
-        response = requests.get(url, headers=headers)
+        response = get_request(url, headers=headers)
 
         if response.status_code == 200:
-            root = ET.fromstring(response.content)
+            root = parse_xml_response(response)
             directories = root.findall('Directory')
 
             if library_names[0] == '*':
@@ -323,71 +366,66 @@ def get_media_path(library_type, meta_root, meta_url, path_mapping, headers):
         media_path_parts = meta_root.findall('.//Part')
         media_paths = []
         for media_part in media_path_parts:
-            media_paths.append(media_part.get('file'))
-        media_path_dirty = {path_member[:path_member.rfind("/")]+"/" for path_member in media_paths}
-        media_path_final = []
-        for path_member in media_path_dirty:
-            for path_list in path_mapping:
-                path_member = path_member.replace(path_list.get('plex'), path_list.get('local'))
-            media_path_final.append(path_member)
+            media_path = media_part.get('file')
+            if media_path:
+                media_paths.append(os.path.dirname(media_path))
+        media_path_final = [map_media_path(path_member, path_mapping) for path_member in set(media_paths)]
 
         return media_path_final
-    
+
     elif library_type in ('tvshow', 'artist'):
         media_path_parts = meta_root.findall('.//Location')
         media_paths = []
         for media_part in media_path_parts:
-            media_paths.append(media_part.get('path')+'/')
-        media_path_final = []
-        for path_member in media_paths:
-            for path_list in path_mapping:
-                path_member = path_member.replace(path_list.get('plex'), path_list.get('local'))
-            media_path_final.append(path_member)
+            media_path = media_part.get('path')
+            if media_path:
+                media_paths.append(media_path)
+        media_path_final = [map_media_path(path_member, path_mapping) for path_member in media_paths]
 
         return media_path_final
     
     elif library_type == 'albums':
         track_url = urljoin(meta_url, '/children')
-        track_response = requests.get(track_url, headers=headers)
-        track0_path = ET.fromstring(track_response.content).findall('Track')[0].find('Media/Part').get('file')
-        media_path = track0_path[:track0_path.rfind('/')]+'/'
-        media_path_final = []
-        for path_list in path_mapping:
-            media_path = media_path.replace(path_list.get('plex'), path_list.get('local'))
-        media_path_final.append(media_path)
-
-        return media_path_final
+        track_response = get_request(track_url, headers=headers)
+        tracks = parse_xml_response(track_response).findall('Track')
+        if not tracks:
+            raise ValueError('Album response has no tracks')
+        track_part = tracks[0].find('Media/Part')
+        track0_path = track_part.get('file') if track_part is not None else None
+        if not track0_path:
+            raise ValueError('Album track has no media path')
+        return [map_media_path(os.path.dirname(track0_path), path_mapping)]
     
 def get_file_path(library_type, movie_filename_type, image_filename_type, media_path, media_title, file_title):
+    sanitized_title = sanitize_filename(media_title or '')
+    file_name = sanitize_filename(os.path.basename(file_title or '').rsplit('.', 1)[0])
     if library_type == 'artist':
-        nfo_path = os.path.join(media_path, 'artist.nfo')
+        nfo_path = safe_output_path(media_path, 'artist.nfo')
     elif library_type == 'albums':
-        nfo_path = os.path.join(media_path, 'album.nfo')
+        nfo_path = safe_output_path(media_path, 'album.nfo')
     elif library_type == 'movie':
         if movie_filename_type == 'title':
-            sanitized_title = sanitize_filename(media_title)
-            nfo_path = os.path.join(media_path, f'{sanitized_title}.nfo')
+            nfo_path = safe_output_path(media_path, f'{sanitized_title}.nfo')
         elif movie_filename_type == 'filename':
-            file_name = file_title[file_title.rfind('/')+1:file_title.rfind('.')]
-            nfo_path = os.path.join(media_path, f'{file_name}.nfo')
+            nfo_path = safe_output_path(media_path, f'{file_name}.nfo')
         else:
-            nfo_path = os.path.join(media_path, 'movie.nfo')
+            nfo_path = safe_output_path(media_path, 'movie.nfo')
     else:
-        nfo_path = os.path.join(media_path, f'{library_type}.nfo')
+        nfo_path = safe_output_path(media_path, f'{library_type}.nfo')
 
     if library_type == 'movie':
         if image_filename_type == 'title':
-            poster_path = os.path.join(media_path, f'{sanitized_title}_poster.jpg')
-            fanart_path = os.path.join(media_path, f'{sanitized_title}_fanart.jpg')
+            poster_path = safe_output_path(media_path, f'{sanitized_title}_poster.jpg')
+            fanart_path = safe_output_path(media_path, f'{sanitized_title}_fanart.jpg')
         elif image_filename_type == 'filename':
-            poster_path = os.path.join(media_path, f'{file_name}_poster.jpg')
-            fanart_path = os.path.join(media_path, f'{file_name}_fanart.jpg')
+            poster_path = safe_output_path(media_path, f'{file_name}_poster.jpg')
+            fanart_path = safe_output_path(media_path, f'{file_name}_fanart.jpg')
         else:
-            poster_path = os.path.join(media_path, 'poster.jpg')
-            fanart_path = os.path.join(media_path, 'fanart.jpg')
+            poster_path = safe_output_path(media_path, 'poster.jpg')
+            fanart_path = safe_output_path(media_path, 'fanart.jpg')
     else:
-        poster_path = os.path.join(media_path, 'poster.jpg')
-        fanart_path = os.path.join(media_path, 'fanart.jpg')
+        poster_path = safe_output_path(media_path, 'poster.jpg')
+        fanart_path = safe_output_path(media_path, 'fanart.jpg')
 
     return nfo_path, poster_path, fanart_path
 
@@ -399,7 +437,7 @@ def download_image(url:str, headers:dict, save_path:str) -> None:
         headers = headers.copy()
         headers["Accept-Encoding"] = "gzip"
 
-        response = requests.get(url, headers=headers, stream=True)
+        response = get_request(url, headers=headers, stream=True)
 
         if response.status_code == 200:
             content_type = response.headers.get("Content-Type", "")
@@ -411,15 +449,29 @@ def download_image(url:str, headers:dict, save_path:str) -> None:
                 logger.verbose(f"[ERROR] Invalid content type: {content_type}, URL: {url}")
                 return False
 
-            # Manually decompress if needed
+            content_length = response.headers.get("Content-Length")
+            try:
+                if content_length is not None and int(content_length) > MAX_IMAGE_RESPONSE_BYTES:
+                    raise ValueError(f"Image response exceeds {MAX_IMAGE_RESPONSE_BYTES} byte limit")
+            except ValueError as exc:
+                if str(exc).startswith("Image response exceeds"):
+                    raise
+
+            raw_content = response.raw.read(MAX_IMAGE_RESPONSE_BYTES + 1)
+            if len(raw_content) > MAX_IMAGE_RESPONSE_BYTES:
+                raise ValueError(f"Image response exceeds {MAX_IMAGE_RESPONSE_BYTES} byte limit")
+
             if response.headers.get("Content-Encoding") == "gzip":
-                buffer = BytesIO(response.raw.read())
-                decompressed = gzip.GzipFile(fileobj=buffer).read()
+                decompressed = gzip.GzipFile(fileobj=BytesIO(raw_content)).read(MAX_IMAGE_RESPONSE_BYTES + 1)
+                if len(decompressed) > MAX_IMAGE_RESPONSE_BYTES:
+                    raise ValueError(f"Decompressed image exceeds {MAX_IMAGE_RESPONSE_BYTES} byte limit")
                 image_data = BytesIO(decompressed)
             else:
-                image_data = BytesIO(response.content)
+                image_data = BytesIO(raw_content)
 
             image = Image.open(image_data)
+            if image.width * image.height > MAX_IMAGE_PIXELS:
+                raise ValueError(f"Decoded image exceeds {MAX_IMAGE_PIXELS} pixel limit")
             if image.mode in ("RGBA", "P"):
                 image = image.convert("RGB")
             image.save(save_path)
@@ -474,12 +526,17 @@ PEOPLE_MAP = [
 
 
 
-def write_line(nfo, line):
-    nfo.write(line)
-    nfo.write(chr(10))
+XML_NAME_PATTERN = re.compile(r'^[A-Za-z_][A-Za-z0-9_.-]*$')
 
+def add_xml_element(parent, tag, text=None, attributes=None):
+    if not XML_NAME_PATTERN.fullmatch(tag):
+        return None
+    element = ET.SubElement(parent, tag, attributes or {})
+    if text is not None:
+        element.text = str(text)
+    return element
 
-def write_agent_ids_section(nfo, config, meta_root):
+def write_agent_ids_section(root, config, meta_root):
     if not config.get('agent_id'):
         return
 
@@ -488,12 +545,12 @@ def write_agent_ids_section(nfo, config, meta_root):
         return
 
     if 'themoviedb' in guid:
-        write_line(nfo, f"  <tmdbid>{guid.split('//')[-1].split('?')[0]}</tmdbid>")
+        add_xml_element(root, 'tmdbid', guid.split('//')[-1].split('?')[0])
 
     if 'agents.hama' in guid:
         prefix = guid.split('//')[-1].split('-')[0]
         id_part = guid.split('-')[-1].split('?')[0]
-        write_line(nfo, f"  <{prefix}id>{id_part}</{prefix}id>")
+        add_xml_element(root, f'{prefix}id', id_part)
 
     for agent in meta_root.findall('Guid'):
         aid = agent.get('id', '')
@@ -501,26 +558,26 @@ def write_agent_ids_section(nfo, config, meta_root):
             continue
         tag = aid.split(':')[0] + 'id'
         value = aid.split('//')[-1]
-        write_line(nfo, f"  <{tag}>{value}</{tag}>")
+        add_xml_element(root, tag, value)
 
 
-def write_simple_fields(nfo, config, meta_root):
+def write_simple_fields(root, config, meta_root):
     for config_key, attribute, tag in SIMPLE_FIELD_MAP:
         if config.get(config_key) and meta_root.get(attribute):
-            write_line(nfo, f"  <{tag}>{meta_root.get(attribute)}</{tag}>")
+            add_xml_element(root, tag, meta_root.get(attribute))
 
 
-def write_tag_collections(nfo, config, meta_root):
+def write_tag_collections(root, config, meta_root):
     for config_key, element_name, tag_name in TAG_COLLECTION_MAP:
         if not config.get(config_key):
             continue
         for element in meta_root.findall(element_name):
             value = element.get('tag')
             if value:
-                write_line(nfo, f"  <{tag_name}>{value}</{tag_name}>")
+                add_xml_element(root, tag_name, value)
 
 
-def write_ratings_section(nfo, config, meta_root):
+def write_ratings_section(root, config, meta_root):
     if not config.get('ratings'):
         return
 
@@ -528,16 +585,15 @@ def write_ratings_section(nfo, config, meta_root):
     if not ratings:
         return
 
-    write_line(nfo, '  <ratings>')
+    ratings_root = add_xml_element(root, 'ratings')
     for rating in ratings:
         rating_type = rating.get('type')
         value = rating.get('value')
-        if rating_type and value:
-            write_line(nfo, f"    <{rating_type}>{value}</{rating_type}>")
-    write_line(nfo, '  </ratings>')
+        if ratings_root is not None and rating_type and value:
+            add_xml_element(ratings_root, rating_type, value)
 
 
-def write_people_sections(nfo, config, meta_root):
+def write_people_sections(root, config, meta_root):
     for config_key, element_name, tag_name in PEOPLE_MAP:
         if not config.get(config_key):
             continue
@@ -545,15 +601,14 @@ def write_people_sections(nfo, config, meta_root):
             label = person.get('tag')
             if not label:
                 continue
-            parts = [f"  <{tag_name}"]
+            attributes = {}
             thumb = person.get('thumb')
             if thumb:
-                parts.append(f' thumb="{thumb}"')
-            parts.append(f'>{label}</{tag_name}>')
-            write_line(nfo, ''.join(parts))
+                attributes['thumb'] = thumb
+            add_xml_element(root, tag_name, label, attributes)
 
 
-def write_roles_section(nfo, config, meta_root):
+def write_roles_section(root, config, meta_root):
     if not config.get('roles'):
         return
 
@@ -561,31 +616,32 @@ def write_roles_section(nfo, config, meta_root):
         label = role.get('tag')
         if not label:
             continue
-        parts = ['  <actor']
+        attributes = {}
         thumb = role.get('thumb')
         if thumb:
-            parts.append(f' thumb="{thumb}"')
+            attributes['thumb'] = thumb
         role_name = role.get('role')
         if role_name:
-            parts.append(f' role="{role_name}"')
-        parts.append(f'>{label}</actor>')
-        write_line(nfo, ''.join(parts))
+            attributes['role'] = role_name
+        add_xml_element(root, 'actor', label, attributes)
 
 
 def write_nfo(config:dict, nfo_path:str, library_type:str, meta_root:str, media_title:str) -> None:
     try:
         with open(nfo_path, 'w', encoding='utf-8') as nfo:
-            write_line(nfo, '<?xml version="1.0" encoding="UTF-8"?>')
-            write_line(nfo, f'<{library_type} xsi="http://www.w3.org/2001/XMLSchema-instance" xsd="http://www.w3.org/2001/XMLSchema">')
+            root = ET.Element(library_type, {
+                'xsi': 'http://www.w3.org/2001/XMLSchema-instance',
+                'xsd': 'http://www.w3.org/2001/XMLSchema',
+            })
 
-            write_agent_ids_section(nfo, config, meta_root)
-            write_simple_fields(nfo, config, meta_root)
-            write_tag_collections(nfo, config, meta_root)
-            write_ratings_section(nfo, config, meta_root)
-            write_people_sections(nfo, config, meta_root)
-            write_roles_section(nfo, config, meta_root)
+            write_agent_ids_section(root, config, meta_root)
+            write_simple_fields(root, config, meta_root)
+            write_tag_collections(root, config, meta_root)
+            write_ratings_section(root, config, meta_root)
+            write_people_sections(root, config, meta_root)
+            write_roles_section(root, config, meta_root)
 
-            nfo.write(f'</{library_type}>')
+            nfo.write(ET.tostring(root, encoding='unicode', xml_declaration=True))
 
             return True
 
@@ -602,12 +658,15 @@ def write_nfo(config:dict, nfo_path:str, library_type:str, meta_root:str, media_
 def write_episode_nfo(episode_nfo_path, episode_root, media_title):
     try:
         with open(episode_nfo_path, 'w', encoding='utf-8') as nfo:
-            nfo.write('<?xml version="1.0" encoding="UTF-8"?>\n')
-            nfo.write('<episodedetails xsi="http://www.w3.org/2001/XMLSchema-instance" xsd="http://www.w3.org/2001/XMLSchema">\n')
+            root = ET.Element('episodedetails', {
+                'xsi': 'http://www.w3.org/2001/XMLSchema-instance',
+                'xsd': 'http://www.w3.org/2001/XMLSchema',
+            })
 
             if episode_root.findall('Guid'):
                 for guid in episode_root.findall('Guid'):
                     gid = guid.get("id")
+                    utype = None
                     if 'imdb' in guid.get('id'):
                         utype = 'imdb'
                     elif 'tmdb' in guid.get('id'):
@@ -615,7 +674,8 @@ def write_episode_nfo(episode_nfo_path, episode_root, media_title):
                     elif 'tvdb' in guid.get('id'):
                         utype = 'tvdb'
                                             
-                    nfo.write(f'  <uniqueid type="{utype}">{gid.rsplit("/", 1)[-1]}</uniqueid>\n')
+                    if utype and gid:
+                        add_xml_element(root, 'uniqueid', gid.rsplit('/', 1)[-1], {'type': utype})
 
             fields = {
                 'parentIndex': 'season',
@@ -630,9 +690,9 @@ def write_episode_nfo(episode_nfo_path, episode_root, media_title):
             for attr, tag in fields.items():
                 value = episode_root.get(attr)
                 if value:
-                    nfo.write(f'  <{tag}>{value}</{tag}>\n')
+                    add_xml_element(root, tag, value)
 
-            nfo.write('</episodedetails>')
+            nfo.write(ET.tostring(root, encoding='unicode', xml_declaration=True))
 
             return True
 
@@ -720,6 +780,39 @@ def sanitize_filename(filename):
         , "|": "-"
     })).rstrip('.')
     return filename
+
+def map_media_path(path, path_mapping):
+    if not isinstance(path, str) or not path or not os.path.isabs(path):
+        raise ValueError(f'Invalid Plex media path: {path!r}')
+
+    source_path = os.path.normpath(path)
+    for mapping in path_mapping or []:
+        plex_root = mapping.get('plex')
+        local_root = mapping.get('local')
+        if not isinstance(plex_root, str) or not isinstance(local_root, str):
+            raise ValueError('Path mappings must define string plex and local roots')
+        if not os.path.isabs(plex_root) or not os.path.isabs(local_root):
+            raise ValueError('Path mapping roots must be absolute paths')
+
+        plex_root = os.path.normpath(plex_root)
+        local_root = os.path.abspath(os.path.normpath(local_root))
+        relative_path = os.path.relpath(source_path, plex_root)
+        if relative_path == os.curdir or not relative_path.startswith(os.pardir + os.sep):
+            mapped_path = os.path.normpath(os.path.join(local_root, relative_path))
+            if os.path.commonpath((os.path.realpath(local_root), os.path.realpath(mapped_path))) != os.path.realpath(local_root):
+                raise ValueError(f'Mapped media path escapes local root: {path!r}')
+            return mapped_path
+
+    if path_mapping:
+        raise ValueError(f'Plex media path is outside configured mappings: {path!r}')
+    return source_path
+
+def safe_output_path(media_path, filename):
+    root = os.path.realpath(media_path)
+    candidate = os.path.realpath(os.path.join(media_path, filename))
+    if os.path.commonpath((root, candidate)) != root:
+        raise ValueError(f'Output path escapes media root: {filename!r}')
+    return candidate
 
 def str_to_bool(value):
     return str(value).lower() in ("1", "true", "yes", "on")
@@ -853,7 +946,7 @@ def resolve_library_type(library_type, check_music):
 def fetch_library_root(library, library_root, check_music_state):
     suffix = 'all' if check_music_state == 0 else 'albums'
     url = urljoin(baseurl, f"/library/sections/{library.get('key')}/{suffix}")
-    response = requests.get(url, headers=headers)
+    response = get_request(url, headers=headers)
 
     if response.status_code == 400:
         response = fallback_response(url, headers['X-Plex-Token'])
@@ -862,7 +955,7 @@ def fetch_library_root(library, library_root, check_music_state):
         logger.error(f"Failed to get library info with error code {response.status_code}: {response.text}")
         sys.exit()
 
-    return ET.fromstring(response.content)
+    return parse_xml_response(response)
 
 def update_summary(summary, category, status):
     if status == 'success':
@@ -881,32 +974,34 @@ def update_summary(summary, category, status):
 def export_episode_nfos(meta_url, path_mapping, config, media_title, dry_run, force_overwrite, summary):
     try:
         meta_season_url = urljoin(meta_url + '/', 'children')
-        season_resp = requests.get(meta_season_url, headers=headers)
+        season_resp = get_request(meta_season_url, headers=headers)
 
         if season_resp.status_code != 200:
             return
 
-        for season in ET.fromstring(season_resp.content).findall('Directory'):
+        for season in parse_xml_response(season_resp).findall('Directory'):
             season_key = season.get('ratingKey')
             episodes_url = urljoin(meta_url[:meta_url.rfind('/')] + '/', f'{season_key}/children')
-            episodes_resp = requests.get(episodes_url, headers=headers)
+            episodes_resp = get_request(episodes_url, headers=headers)
 
             if episodes_resp.status_code != 200:
                 continue
 
-            for episode in ET.fromstring(episodes_resp.content).findall('Video'):
+            for episode in parse_xml_response(episodes_resp).findall('Video'):
                 episode_key = episode.get('ratingKey')
                 episode_url = urljoin(meta_url[:meta_url.rfind('/')] + '/', episode_key)
-                episode_data = requests.get(episode_url, headers=headers)
-                episode_root = ET.fromstring(episode_data.content).find('Video')
+                episode_data = get_request(episode_url, headers=headers)
+                episode_root = parse_xml_response(episode_data).find('Video')
 
                 if episode_root is None:
                     continue
 
-                episode_path = episode_root.find('Media/Part').get('file')
-                episode_nfo_path = episode_path[:episode_path.rfind('.')] + '.nfo'
-                for path_map in path_mapping:
-                    episode_nfo_path = episode_nfo_path.replace(path_map['plex'], path_map['local'])
+                episode_part = episode_root.find('Media/Part')
+                episode_path = episode_part.get('file') if episode_part is not None else None
+                if not episode_path:
+                    logger.verbose(f'[FAILURE] Episode NFO for {media_title} skipped because media path is missing')
+                    continue
+                episode_nfo_path = map_media_path(os.path.splitext(episode_path)[0] + '.nfo', path_mapping)
 
                 status = process_media('Episode NFO', config, episode_nfo_path, 'tvshow', episode_root, media_title, dry_run, force_overwrite)
                 update_summary(summary, 'episode_nfo', status)
@@ -917,12 +1012,12 @@ def export_episode_nfos(meta_url, path_mapping, config, media_title, dry_run, fo
 def export_season_posters(meta_url, media_path, fanart_path, config, meta_root, media_title, dry_run, force_overwrite, summary):
     try:
         season_url = urljoin(f'{meta_url}/', 'children')
-        season_response = requests.get(season_url, headers=headers)
+        season_response = get_request(season_url, headers=headers)
 
         if season_response.status_code != 200:
             return
 
-        season_root = ET.fromstring(season_response.content).findall('Directory')
+        season_root = parse_xml_response(season_response).findall('Directory')
         for season_dir in season_root:
             title = season_dir.get('title')
             if not title or title == 'All episodes':
@@ -936,7 +1031,7 @@ def export_season_posters(meta_url, media_path, fanart_path, config, meta_root, 
             if season_title == 'specials':
                 season_filename = f'season-{season_title}-cover.jpg'
 
-            season_path = os.path.join(media_path, season_filename)
+            season_path = safe_output_path(media_path, season_filename)
             status = process_media('Season Poster', config, fanart_path, 'tvshow', meta_root, media_title, dry_run, force_overwrite, season_dir, season_path)
             update_summary(summary, 'season_poster', status)
     except Exception as exc:
@@ -946,11 +1041,11 @@ def export_season_posters(meta_url, media_path, fanart_path, config, meta_root, 
 def process_content(content, library_root, library_type, args, config, path_mapping, exports, movie_filename_type, image_filename_type, dry_run, force_overwrite, summary):
     ratingkey = content.get('ratingKey')
     meta_url = urljoin(baseurl, f"/library/metadata/{ratingkey}")
-    meta_response = requests.get(meta_url, headers=headers)
+    meta_response = get_request(meta_url, headers=headers)
     if meta_response.status_code != 200:
         return
 
-    meta_root = ET.fromstring(meta_response.content).find(library_root)
+    meta_root = parse_xml_response(meta_response).find(library_root)
     if meta_root is None:
         return
 
