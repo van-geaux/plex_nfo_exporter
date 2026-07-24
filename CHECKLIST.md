@@ -14,10 +14,14 @@ and ordering; this file tracks item-by-item status. Migrated from the former
 
 ## Audit baseline
 
-- Dependabot alerts reviewed: 2026-07-24
-- Open Dependabot alerts: 28
-- Historical fixed alerts: 1 (Tornado, alert #1)
-- Current dependency manifest: `requirements.txt`
+- Dependabot alerts reviewed: 2026-07-24 (baseline), re-verified 2026-07-25
+  after pushing this branch's fixes to `origin/main` for the first time.
+- Open Dependabot alerts: 0 (as of 2026-07-25).
+- Historical fixed alerts: 27 — Tornado (#1, fixed before this session);
+  Pillow, urllib3, requests, python-dotenv (#2–28, closed by pushing the
+  pinned `requirements.txt`); pytest (#29, a new alert that surfaced
+  post-push, closed same-session by upgrading to `9.0.3`).
+- Current dependency manifests: `requirements.txt`, `requirements-dev.txt`.
 
 ## Reliability and correctness
 
@@ -95,21 +99,21 @@ and ordering; this file tracks item-by-item status. Migrated from the former
 - [x] Upgrade `urllib3` to `2.7.0`.
 - [x] Upgrade `requests` to `2.34.2`.
 - [x] Upgrade `python-dotenv` to `1.2.2`.
+- [x] Upgrade `pytest` (dev dependency) to `9.0.3`, closing a new Dependabot
+      alert (CVE-2025-71176, medium, vulnerable `tmpdir` handling on UNIX)
+      surfaced only after pushing to `origin/main`. Verified: full pytest
+      suite (68 tests) still passes, `pip check` and `pip-audit -r
+      requirements-dev.txt` both clean.
 - [x] Run dependency consistency checks (`pip check`) and a vulnerability scan
       against `requirements.txt`.
-- [-] Recheck Dependabot alerts and confirm the Pillow/urllib3/Requests/
-      python-dotenv alerts close. `gh auth login`/`gh auth refresh -s
-      workflow` re-authenticated this session, and all 13 local commits
-      (including the dependency pins) were pushed to `origin/main` for the
-      first time — previously the alerts were open because Dependabot was
-      scanning the old, unpinned `requirements.txt` still on `origin/main`.
-      As of this push, alerts still show `open` with unchanged timestamps
-      (`gh api repos/van-geaux/plex_nfo_exporter/dependabot/alerts`) —
-      GitHub's re-scan is async and hadn't completed yet as of this
-      session. `pip-audit` against the current pins already shows no known
-      vulnerabilities; re-run the `gh api` query above (or check
-      https://github.com/van-geaux/plex_nfo_exporter/security/dependabot)
-      after GitHub's scan catches up to confirm alerts closed.
+- [x] Recheck Dependabot alerts and confirm the Pillow/urllib3/Requests/
+      python-dotenv alerts close. Re-authenticated `gh` this session and
+      pushed all local commits to `origin/main` for the first time
+      (previously alerts were open because Dependabot was scanning the
+      old, unpinned `requirements.txt` still on `origin/main` — nothing
+      had ever been pushed). Confirmed via `gh api
+      repos/van-geaux/plex_nfo_exporter/dependabot/alerts`: all 26
+      Pillow/urllib3/requests/python-dotenv alerts are now `fixed`.
 - [x] Pin `alive-progress` to `3.3.0`.
 - [x] Pin the Docker base image (`python:3.11-slim`) by digest.
 - [x] Verify the Supercronic binary download by checksum in `dockerfile`.
@@ -171,12 +175,14 @@ and ordering; this file tracks item-by-item status. Migrated from the former
       with correct content, writes to the mounted log volume, and
       supercronic starts and shuts down cleanly; `DRY_RUN=true` logs the
       intended action without writing any file.
-- [-] Re-query GitHub Dependabot and record the final alert state. `gh`
-      re-authenticated and `main` pushed to `origin` this session (see the
-      note above in the dependency/supply-chain section) — waiting on
-      GitHub's async re-scan to actually close the alerts. Re-check
-      `gh api repos/van-geaux/plex_nfo_exporter/dependabot/alerts` or the
-      Security tab once it's caught up.
+- [x] Re-query GitHub Dependabot and record the final alert state. Final
+      state after pushing to `origin/main` and letting GitHub's re-scan
+      complete: 26 alerts (Pillow ×17, urllib3 ×6, requests ×2,
+      python-dotenv ×1) now `fixed`; the pre-existing `tornado` alert (#1)
+      stays `fixed` from before this session. One new alert surfaced
+      post-push (`pytest` CVE-2025-71176, medium) — fixed immediately by
+      upgrading to `9.0.3` (see the dependency/supply-chain section above).
+      Zero open Dependabot alerts as of this session.
 - [x] Update the README only where implemented behavior or documented
       procedures changed. Reworded for readability and added an opening
       note that the project is AI-assisted, per the user's explicit
