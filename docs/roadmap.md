@@ -52,13 +52,13 @@ phase: reducing reliance on module-level globals (see Phase 5).
 
 A real test runner and layout now exists (`tests/test_main.py`, `pytest` —
 see `docs/testing.md`), with unit coverage for URL/request construction, path
-mapping and filename generation, XML/NFO output, GUID handling, and
-incomplete-Plex-response handling. The stale `tests/test_service.py`
-reference to a nonexistent `service` package has been removed — nothing in
-the repo or git history to restore it against. Remaining: unit coverage for
-configuration loading/environment substitution, and reducing reliance on
-module-level globals (`logger`, `headers`, `baseurl`) so core functions can
-be tested and reused without a live Plex connection.
+mapping and filename generation, XML/NFO output, GUID handling,
+incomplete-Plex-response handling, and configuration loading/environment
+substitution. The stale `tests/test_service.py` reference to a nonexistent
+`service` package has been removed — nothing in the repo or git history to
+restore it against. Remaining: reducing reliance on module-level globals
+(`logger`, `headers`, `baseurl`) so core functions can be tested and reused
+without a live Plex connection.
 
 ## Phase 6 — Final verification and release follow-up
 

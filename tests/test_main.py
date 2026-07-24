@@ -1,5 +1,7 @@
 import argparse
+import os
 import xml.etree.ElementTree as ET
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -466,3 +468,194 @@ def test_process_content_movie_without_media_part_does_not_raise(monkeypatch):
     )
 
     assert captured_file_titles == [None]
+
+
+# ---------------------------------------------------------------------------
+# resolve_config_dir
+# ---------------------------------------------------------------------------
+
+def test_resolve_config_dir_prefers_app_config_when_present(monkeypatch):
+    monkeypatch.setattr(main.os.path, "isdir", lambda path: path == "/app/config")
+    assert main.resolve_config_dir() == "/app/config"
+
+
+def test_resolve_config_dir_falls_back_to_cwd(monkeypatch):
+    monkeypatch.setattr(main.os.path, "isdir", lambda path: False)
+    assert main.resolve_config_dir() == "."
+
+
+# ---------------------------------------------------------------------------
+# str_to_bool
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        ("true", True),
+        ("True", True),
+        ("1", True),
+        ("yes", True),
+        ("on", True),
+        ("false", False),
+        ("0", False),
+        ("", False),
+        ("no", False),
+    ],
+)
+def test_str_to_bool(value, expected):
+    assert main.str_to_bool(value) is expected
+
+
+# ---------------------------------------------------------------------------
+# load_configuration — env substitution and .env loading
+# ---------------------------------------------------------------------------
+
+def test_load_configuration_substitutes_env_vars_in_config_yml(tmp_path, monkeypatch):
+    monkeypatch.setenv("PLEX_TOKEN", "secret-token-123")
+    (tmp_path / "config.yml").write_text(
+        "Base URL: http://plex.local:32400\nToken: ${PLEX_TOKEN}\n",
+        encoding="utf-8",
+    )
+
+    config = main.load_configuration(str(tmp_path))
+
+    assert config["Token"] == "secret-token-123"
+    assert config["Base URL"] == "http://plex.local:32400"
+
+
+def test_load_configuration_missing_env_var_substitutes_empty_string(tmp_path, monkeypatch):
+    monkeypatch.delenv("UNSET_VAR_FOR_TEST", raising=False)
+    (tmp_path / "config.yml").write_text("Token: ${UNSET_VAR_FOR_TEST}\n", encoding="utf-8")
+
+    config = main.load_configuration(str(tmp_path))
+
+    # An empty substitution leaves the YAML value blank, which PyYAML parses as None.
+    assert config["Token"] is None
+
+
+def test_load_configuration_loads_dotenv_file(tmp_path, monkeypatch):
+    monkeypatch.delenv("PLEX_URL_FROM_DOTENV_TEST", raising=False)
+    (tmp_path / ".env").write_text("PLEX_URL_FROM_DOTENV_TEST=http://from-dotenv\n", encoding="utf-8")
+    (tmp_path / "config.yml").write_text("Base URL: ${PLEX_URL_FROM_DOTENV_TEST}\n", encoding="utf-8")
+
+    config = main.load_configuration(str(tmp_path))
+
+    assert config["Base URL"] == "http://from-dotenv"
+    assert os.getenv("PLEX_URL_FROM_DOTENV_TEST") == "http://from-dotenv"
+
+
+# ---------------------------------------------------------------------------
+# resolve_base_settings — precedence and validation
+# ---------------------------------------------------------------------------
+
+def _args(**overrides):
+    base = {"url": None, "token": None, "library": None}
+    base.update(overrides)
+    return argparse.Namespace(**base)
+
+
+def test_resolve_base_settings_prefers_args_over_env_and_config(monkeypatch):
+    monkeypatch.setattr(main, "logger", MagicMock(), raising=False)
+    monkeypatch.setenv("PLEX_URL", "http://from-env")
+    monkeypatch.setenv("PLEX_TOKEN", "env-token")
+
+    args = _args(url="http://from-args", token="args-token")
+    config = {"Base URL": "http://from-config", "Token": "config-token"}
+
+    token, library_names, blacklists, path_mapping = main.resolve_base_settings(args, config)
+
+    assert main.baseurl == "http://from-args"
+    assert token == "args-token"
+
+
+def test_resolve_base_settings_falls_back_to_env_then_config(monkeypatch):
+    monkeypatch.setattr(main, "logger", MagicMock(), raising=False)
+    monkeypatch.delenv("PLEX_URL", raising=False)
+    monkeypatch.delenv("PLEX_TOKEN", raising=False)
+
+    args = _args()
+    config = {"Base URL": "'http://from-config'", "Token": '"config-token"'}
+
+    token, *_ = main.resolve_base_settings(args, config)
+
+    assert main.baseurl == "http://from-config"
+    assert token == "config-token"
+
+
+def test_resolve_base_settings_exits_when_url_missing(monkeypatch):
+    monkeypatch.setattr(main, "logger", MagicMock(), raising=False)
+    monkeypatch.delenv("PLEX_URL", raising=False)
+
+    args = _args()
+    config = {"Token": "config-token"}
+
+    with pytest.raises(SystemExit):
+        main.resolve_base_settings(args, config)
+
+
+def test_resolve_base_settings_exits_when_token_missing(monkeypatch):
+    monkeypatch.setattr(main, "logger", MagicMock(), raising=False)
+    monkeypatch.delenv("PLEX_TOKEN", raising=False)
+
+    args = _args(url="http://from-args")
+    config = {}
+
+    with pytest.raises(SystemExit):
+        main.resolve_base_settings(args, config)
+
+
+# ---------------------------------------------------------------------------
+# build_export_flags / determine_force_overwrite / determine_dry_run
+# ---------------------------------------------------------------------------
+
+def test_build_export_flags_prefers_cli_args_over_config(monkeypatch):
+    monkeypatch.setattr(main, "logger", MagicMock(), raising=False)
+    args = argparse.Namespace(
+        export_nfo=True,
+        export_episode_nfo=None,
+        export_poster=False,
+        export_fanart=None,
+        export_season_poster=None,
+    )
+    config = {
+        "Export NFO": False,
+        "Export episode NFO": True,
+        "Export poster": True,
+        "Export fanart": False,
+        "Export season poster": True,
+    }
+
+    exports = main.build_export_flags(args, config)
+
+    assert exports["export_nfo"] is True  # CLI overrides config
+    assert exports["export_episode_nfo"] is True  # falls back to config
+    assert exports["export_poster"] is False  # explicit CLI False overrides config True
+    assert exports["export_fanart"] is False  # falls back to config
+    assert exports["export_season_poster"] is True  # falls back to config
+
+
+def test_determine_force_overwrite_precedence(monkeypatch):
+    monkeypatch.setattr(main, "logger", MagicMock(), raising=False)
+
+    monkeypatch.delenv("FORCE_OVERWRITE", raising=False)
+    assert main.determine_force_overwrite(_args(force_overwrite=True), {}) is True
+
+    monkeypatch.setenv("FORCE_OVERWRITE", "true")
+    assert main.determine_force_overwrite(_args(force_overwrite=False), {}) is True
+
+    monkeypatch.delenv("FORCE_OVERWRITE", raising=False)
+    assert main.determine_force_overwrite(_args(force_overwrite=False), {"Force overwrite": True}) is True
+    assert main.determine_force_overwrite(_args(force_overwrite=False), {}) is False
+
+
+def test_determine_dry_run_precedence(monkeypatch):
+    monkeypatch.setattr(main, "logger", MagicMock(), raising=False)
+
+    monkeypatch.delenv("DRY_RUN", raising=False)
+    assert main.determine_dry_run(_args(dry_run=True)) is True
+
+    monkeypatch.setenv("DRY_RUN", "true")
+    assert main.determine_dry_run(_args(dry_run=False)) is True
+
+    monkeypatch.delenv("DRY_RUN", raising=False)
+    assert main.determine_dry_run(_args(dry_run=False)) is False

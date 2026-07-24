@@ -67,7 +67,10 @@ and ordering; this file tracks item-by-item status. Migrated from the former
       `sanitize_filename`).
 - [x] Add unit tests for XML/NFO output (`add_xml_element` and the NFO
       section writers).
-- [ ] Add unit tests for configuration loading and environment substitution.
+- [x] Add unit tests for configuration loading and environment substitution
+      (`load_configuration`, `resolve_base_settings`, `build_export_flags`,
+      `determine_force_overwrite`, `determine_dry_run`, `resolve_config_dir`,
+      `str_to_bool`).
 - [x] Add unit tests for incomplete Plex responses: `write_episode_nfo()`
       with a `Guid` missing `id` / with an unknown agent, and
       `process_content()` for a movie with no `Media/Part`.
