@@ -40,22 +40,23 @@ Replace partial-prefix path mapping with boundary-aware, absolute-path
 mapping that fails closed on unmatched mappings or traversal attempts, and
 apply it consistently across movie/TV/episode/season/artist/album output
 paths. Replace raw XML string concatenation in NFO generation with an
-`ElementTree` builder that escapes correctly. Remaining in this phase:
-harden episode GUID handling so unknown agent IDs don't leave state
-undefined, add defensive parsing for incomplete Plex metadata across media
-types, and fix movie image-filename derivation so it doesn't depend on the
-NFO naming mode.
+`ElementTree` builder that escapes correctly. Episode GUID handling has been
+hardened (a missing `id` attribute no longer raises `TypeError`), the movie
+`Media/Part` lookup in `process_content()` is now guarded, and
+`process_library()` catches per-item exceptions so one item with incomplete
+Plex metadata doesn't abort the whole library run. Movie image-filename
+derivation was already independent of the NFO naming mode. Remaining in this
+phase: reducing reliance on module-level globals (see Phase 5).
 
 ## Phase 5 — Testability and maintainability
 
 A real test runner and layout now exists (`tests/test_main.py`, `pytest` —
 see `docs/testing.md`), with unit coverage for URL/request construction, path
-mapping and filename generation, and XML/NFO output. The stale
-`tests/test_service.py` reference to a nonexistent `service` package has
-been removed — nothing in the repo or git history to restore it against.
-Remaining: unit coverage for configuration loading/environment substitution
-and for incomplete-response handling (write the latter alongside the Phase 4
-`Media/Part` guard and defensive-parsing fixes), and reducing reliance on
+mapping and filename generation, XML/NFO output, GUID handling, and
+incomplete-Plex-response handling. The stale `tests/test_service.py`
+reference to a nonexistent `service` package has been removed — nothing in
+the repo or git history to restore it against. Remaining: unit coverage for
+configuration loading/environment substitution, and reducing reliance on
 module-level globals (`logger`, `headers`, `baseurl`) so core functions can
 be tested and reused without a live Plex connection.
 
@@ -77,6 +78,6 @@ changed.
 5. Phase 5 — testability
 6. Phase 6 — final verification and release follow-up
 
-Phases 1–4 are substantially complete; see `CHECKLIST.md` for the remaining
-open items in Phase 4 (GUID handling, incomplete-metadata parsing, image
-filename derivation) and all of Phase 5.
+Phases 1–4 are complete; see `CHECKLIST.md` for the remaining open items in
+Phase 5 (config/env test coverage, reducing module-level globals) and Phase
+6 (CI, final verification and release follow-up).

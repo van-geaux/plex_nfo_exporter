@@ -1,3 +1,4 @@
+import argparse
 import xml.etree.ElementTree as ET
 
 import pytest
@@ -366,3 +367,102 @@ def test_write_agent_ids_section_disabled_by_config():
     root = ET.Element("movie")
     main.write_agent_ids_section(root, {"agent_id": False}, meta_root)
     assert list(root) == []
+
+
+# ---------------------------------------------------------------------------
+# write_episode_nfo
+# ---------------------------------------------------------------------------
+
+class _FakeLogger:
+    def verbose(self, *args, **kwargs):
+        pass
+
+    def debug(self, *args, **kwargs):
+        pass
+
+
+def test_write_episode_nfo_guid_missing_id_is_skipped_not_fatal(tmp_path, monkeypatch):
+    monkeypatch.setattr(main, "logger", _FakeLogger(), raising=False)
+    episode_root = ET.fromstring(
+        '<Video parentIndex="1" index="2" title="Ep">'
+        '<Guid/>'
+        '<Guid id="imdb://tt0000001"/>'
+        "</Video>"
+    )
+    nfo_path = tmp_path / "episode.nfo"
+
+    result = main.write_episode_nfo(str(nfo_path), episode_root, "Ep")
+
+    assert result is True
+    written = nfo_path.read_text(encoding="utf-8")
+    root = ET.fromstring(written)
+    uniqueids = root.findall("uniqueid")
+    assert len(uniqueids) == 1
+    assert uniqueids[0].get("type") == "imdb"
+    assert uniqueids[0].text == "tt0000001"
+
+
+def test_write_episode_nfo_unknown_agent_guid_is_ignored(tmp_path, monkeypatch):
+    monkeypatch.setattr(main, "logger", _FakeLogger(), raising=False)
+    episode_root = ET.fromstring(
+        '<Video parentIndex="1" index="2" title="Ep">'
+        '<Guid id="anidb://12345"/>'
+        "</Video>"
+    )
+    nfo_path = tmp_path / "episode.nfo"
+
+    result = main.write_episode_nfo(str(nfo_path), episode_root, "Ep")
+
+    assert result is True
+    root = ET.fromstring(nfo_path.read_text(encoding="utf-8"))
+    assert root.findall("uniqueid") == []
+
+
+# ---------------------------------------------------------------------------
+# process_content — defensive Media/Part handling for movies
+# ---------------------------------------------------------------------------
+
+class _FakeResponse200:
+    status_code = 200
+
+
+def test_process_content_movie_without_media_part_does_not_raise(monkeypatch):
+    monkeypatch.setattr(main, "logger", _FakeLogger(), raising=False)
+    monkeypatch.setattr(main, "baseurl", "http://plex.local", raising=False)
+    monkeypatch.setattr(main, "headers", {}, raising=False)
+    monkeypatch.setattr(main, "get_request", lambda *a, **k: _FakeResponse200())
+
+    meta_root = ET.fromstring('<Video ratingKey="1" title="No Media Part"/>')
+
+    class _Wrapper:
+        def find(self, path):
+            return meta_root
+
+    monkeypatch.setattr(main, "parse_xml_response", lambda response: _Wrapper())
+    monkeypatch.setattr(main, "get_media_path", lambda *a, **k: ["/movies/No Media Part"])
+
+    captured_file_titles = []
+
+    def fake_get_file_path(library_type, movie_filename_type, image_filename_type, media_path, media_title, file_title):
+        captured_file_titles.append(file_title)
+        return ("nfo.nfo", "poster.jpg", "fanart.jpg")
+
+    monkeypatch.setattr(main, "get_file_path", fake_get_file_path)
+
+    content = ET.Element("Video", {"ratingKey": "1"})
+    args = argparse.Namespace(title=None)
+    exports = {
+        "export_nfo": False,
+        "export_episode_nfo": False,
+        "export_poster": False,
+        "export_fanart": False,
+        "export_season_poster": False,
+    }
+    summary = {}
+
+    main.process_content(
+        content, "Video", "movie", args, {}, [], exports,
+        "default", "default", False, False, summary,
+    )
+
+    assert captured_file_titles == [None]

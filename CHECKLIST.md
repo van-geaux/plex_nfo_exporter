@@ -30,17 +30,24 @@ and ordering; this file tracks item-by-item status. Migrated from the former
       concatenation, with escaping and tag-name validation.
 - [x] Plex/image HTTP requests centralized behind `get_request()` with
       explicit timeouts and no automatic retries.
-- [ ] Guard `.find('Media/Part')` usage for movies and episodes; skip or warn
+- [x] Guard `.find('Media/Part')` usage for movies and episodes; skip or warn
       when Plex returns metadata without media parts instead of raising
-      `AttributeError`.
-- [ ] Fix `get_file_path()` so movie image naming does not depend on
+      `AttributeError`. (Episode side was already guarded in
+      `export_episode_nfos`; movie side fixed in `process_content`.)
+- [x] Fix `get_file_path()` so movie image naming does not depend on
       `Movie NFO name type`; compute the sanitized title and filename once
-      before branching.
-- [ ] Harden `write_episode_nfo()` GUID handling so unknown agent IDs don't
-      leave `utype` undefined or silently drop the `<uniqueid>`.
-- [ ] Add defensive parsing for albums, movies, seasons, and episodes when
+      before branching. (Already resolved in `ed894b1`; confirmed via
+      `test_get_file_path_image_naming_independent_of_nfo_naming`.)
+- [x] Harden `write_episode_nfo()` GUID handling so unknown agent IDs don't
+      leave `utype` undefined or silently drop the `<uniqueid>`. Fixed a real
+      bug where a `Guid` element with no `id` attribute raised `TypeError`
+      (`'imdb' in guid.get('id')` on `None`), aborting the whole episode NFO.
+- [x] Add defensive parsing for albums, movies, seasons, and episodes when
       Plex returns incomplete XML nodes; log and skip bad items instead of
-      aborting.
+      aborting. `process_library()` now catches per-item exceptions from
+      `process_content()` (e.g. `get_media_path()`'s `ValueError` for
+      albums with no tracks) and logs + continues instead of aborting the
+      whole library.
 - [ ] Reduce reliance on module-level globals (`logger`, `headers`, `baseurl`)
       so exporter functions are easier to test and reuse.
 
@@ -61,9 +68,9 @@ and ordering; this file tracks item-by-item status. Migrated from the former
 - [x] Add unit tests for XML/NFO output (`add_xml_element` and the NFO
       section writers).
 - [ ] Add unit tests for configuration loading and environment substitution.
-- [ ] Add unit tests for incomplete Plex responses (blocked on the
-      `Media/Part` guard and defensive-parsing items in Phase 4 below —
-      write the tests alongside those fixes).
+- [x] Add unit tests for incomplete Plex responses: `write_episode_nfo()`
+      with a `Guid` missing `id` / with an unknown agent, and
+      `process_content()` for a movie with no `Media/Part`.
 
 ## Dependency and supply-chain hardening
 

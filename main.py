@@ -666,15 +666,17 @@ def write_episode_nfo(episode_nfo_path, episode_root, media_title):
             if episode_root.findall('Guid'):
                 for guid in episode_root.findall('Guid'):
                     gid = guid.get("id")
+                    if not gid:
+                        continue
                     utype = None
-                    if 'imdb' in guid.get('id'):
+                    if 'imdb' in gid:
                         utype = 'imdb'
-                    elif 'tmdb' in guid.get('id'):
+                    elif 'tmdb' in gid:
                         utype = 'tmdb'
-                    elif 'tvdb' in guid.get('id'):
+                    elif 'tvdb' in gid:
                         utype = 'tvdb'
-                                            
-                    if utype and gid:
+
+                    if utype:
                         add_xml_element(root, 'uniqueid', gid.rsplit('/', 1)[-1], {'type': utype})
 
             fields = {
@@ -1054,7 +1056,11 @@ def process_content(content, library_root, library_type, args, config, path_mapp
     if args.title and media_title not in args.title:
         return
 
-    file_title = meta_root.find('Media/Part').get('file') if library_type == 'movie' else None
+    if library_type == 'movie':
+        movie_part = meta_root.find('Media/Part')
+        file_title = movie_part.get('file') if movie_part is not None else None
+    else:
+        file_title = None
     media_paths = get_media_path(library_type, meta_root, meta_url, path_mapping, headers)
 
     for media_path in media_paths:
@@ -1093,7 +1099,10 @@ def process_library(library, args, config, path_mapping, exports, movie_filename
     with alive_bar(len(library_contents), monitor=True, elapsed=True, stats=False, receipt_text=True) as bar:
         bar.text(f'for {library_name}')
         for content in library_contents:
-            process_content(content, library_root, library_type, args, config, path_mapping, exports, movie_filename_type, image_filename_type, dry_run, force_overwrite, summary)
+            try:
+                process_content(content, library_root, library_type, args, config, path_mapping, exports, movie_filename_type, image_filename_type, dry_run, force_overwrite, summary)
+            except Exception as exc:
+                logger.verbose(f"[FAILURE] Skipping item (ratingKey={content.get('ratingKey')}) in {library_name} due to incomplete or unexpected Plex metadata: {exc}")
             bar()
 
     summary['finish'] = datetime.now().strftime('%Y-%m-%d %H:%M')
