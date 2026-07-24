@@ -97,8 +97,11 @@ and ordering; this file tracks item-by-item status. Migrated from the former
 - [x] Upgrade `python-dotenv` to `1.2.2`.
 - [x] Run dependency consistency checks (`pip check`) and a vulnerability scan
       against `requirements.txt`.
-- [ ] Recheck Dependabot alerts and confirm the Pillow/urllib3/Requests/
-      python-dotenv alerts close.
+- [!] Recheck Dependabot alerts and confirm the Pillow/urllib3/Requests/
+      python-dotenv alerts close. Blocked: same `gh` auth issue as the
+      Phase 6 Dependabot re-query below — `pip-audit` against current pins
+      shows no known vulnerabilities as a proxy, but the actual Dependabot
+      alert states need the user's GitHub access to confirm/close.
 - [x] Pin `alive-progress` to `3.3.0`.
 - [x] Pin the Docker base image (`python:3.11-slim`) by digest.
 - [x] Verify the Supercronic binary download by checksum in `dockerfile`.
