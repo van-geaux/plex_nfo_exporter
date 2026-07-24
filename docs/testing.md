@@ -17,6 +17,16 @@ unit-tests its pure helper functions — no live Plex server required:
   `write_tag_collections`, `write_ratings_section`, `write_people_sections`,
   `write_roles_section`, `write_agent_ids_section`), each driven by a
   hand-built `xml.etree.ElementTree` element standing in for Plex metadata.
+- `write_episode_nfo` — a `Guid` with no `id` attribute, and an unknown GUID
+  agent type, are both handled without raising.
+- `process_content` — a movie item with no `Media/Part` doesn't raise
+  (`get_request`/`parse_xml_response`/`get_media_path`/`get_file_path` are
+  monkeypatched so the test stays a unit test, not an integration test).
+- `resolve_config_dir`, `str_to_bool`, `load_configuration` (`.env` loading,
+  `${VAR}` substitution, missing-var fallback), `resolve_base_settings`
+  (CLI > env > config precedence, quote stripping, `sys.exit` on missing
+  url/token), `build_export_flags`, `determine_force_overwrite`,
+  `determine_dry_run`.
 
 Run it with:
 
@@ -29,12 +39,22 @@ pytest tests/ -v
 (`requirements-dev.txt` layers `pytest` on top of `requirements.txt`; the
 runtime dependency list is unaffected.)
 
-Functions that depend on module-level globals (`baseurl`, `headers`,
-`logger`) or perform live HTTP/filesystem I/O end-to-end — `process_media`,
-`process_content`, `process_library`, `download_image`, `write_nfo`,
-`write_episode_nfo` — are not yet covered by unit tests; see
-`CHECKLIST.md`'s testability items (reducing global state, adding coverage
-for incomplete Plex responses) for what's still open.
+`.github/workflows/ci.yml` runs this suite (plus `pip check` and a syntax
+check) on every push/PR, alongside a separate `dependency-audit` job
+(`pip-audit -r requirements.txt`) and a `docker-build` job that builds the
+image from `dockerfile`. All three were also verified locally before being
+added: `docker build`, `pip-audit`, and an `aquasec/trivy image` container
+scan (see `CHECKLIST.md`'s supply-chain section for what that last one
+caught).
+
+Functions that perform live HTTP/filesystem I/O end-to-end — `process_media`,
+`process_library`, `download_image`, `write_nfo`, `fetch_library_root`,
+`export_episode_nfos`, `export_season_posters` — are still not covered by
+unit tests (only `process_content`'s defensive-parsing path is, via heavy
+monkeypatching). An ad hoc end-to-end smoke test against a fake local Plex
+HTTP server (not committed — a throwaway script) was used once to verify the
+full call chain after threading `headers`/`baseurl` explicitly through it;
+see `docs/architecture.md`'s "Global state" section for what changed there.
 
 `tests/test_service.py`, which referenced a nonexistent `service` package
 from an abandoned web-service/job-runner effort, has been removed — there was
@@ -67,7 +87,10 @@ anything that touches live Plex behavior:
 
 - Add new tests to `tests/test_main.py` (or a new `tests/test_*.py` module)
   by importing `main` directly, following the pattern above.
-- Functions that read the module globals (`get_request`, `process_media`,
-  `main`) need those globals set or monkeypatched (see
-  `test_get_request_rejects_cross_origin` for the pattern) until
-  `CHECKLIST.md`'s global-state cleanup item is done.
+- `get_request()` still reads the module global `baseurl` for its
+  same-origin check (by design — see `docs/architecture.md`), so tests that
+  exercise it need that global set or monkeypatched (see
+  `test_get_request_rejects_cross_origin` for the pattern;
+  `monkeypatch.setattr(main, "baseurl", ..., raising=False)` since it may
+  not exist yet at import time). Everything else that used to rely on
+  bare-global `headers` now takes it as an explicit parameter instead.

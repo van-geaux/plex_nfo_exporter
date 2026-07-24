@@ -99,7 +99,12 @@ Two independent guards keep all filesystem writes inside expected directories:
   requires absolute, normalized roots, computes the path via `os.path.relpath`,
   and rejects (raises `ValueError`) any result that isn't actually inside the
   matched local root (traversal / partial-prefix protection) or that matches no
-  mapping at all when mappings are configured (fails closed).
+  mapping at all when mappings are configured (fails closed). This means every
+  Plex library root needs an entry in `Path mapping` once the list is
+  non-empty — including an identity entry (`plex` == `local`) for a root
+  that's already mounted at the same path for both Plex and this container.
+  `Path mapping: []` (fully empty) is the only case where no entries are
+  required at all. See the README's "Path Mapping" section.
 - `safe_output_path()` — joins a computed filename onto a media directory and
   rejects the result if it resolves (`os.path.realpath`) outside that directory.
 
@@ -123,9 +128,10 @@ output is escaped and well-formed:
     before creating it, so unexpected Plex data can't produce malformed XML.
 - `write_episode_nfo()` is a separate builder for `<episodedetails>` (season,
   episode, title, plot, mpaa, user rating, aired date, and `<uniqueid>` per
-  `Guid`, tagged `imdb`/`tmdb`/`tvdb` by substring match). Unknown GUID agent
-  types are currently silently skipped (see `docs/roadmap.md` /
-  `CHECKLIST.md`).
+  `Guid`, tagged `imdb`/`tmdb`/`tvdb` by substring match). A `Guid` element
+  with no `id` attribute is skipped instead of raising; unknown GUID agent
+  types (matching no known substring) are silently skipped by design, since
+  there's no NFO tag to write for them.
 
 ## Write decision logic
 
@@ -156,10 +162,22 @@ Per-library counts are aggregated in `create_library_result()` /
 
 ## Global state
 
-`baseurl`, `headers`, and `logger` are module-level globals set inside
-`main()`/`resolve_base_settings()` and read by helper functions throughout the
-file (e.g. `get_request()`, `process_media()`). This makes the exporter hard to
-unit test in isolation; see `CHECKLIST.md` for the tracked cleanup item.
+`logger` is initialized at true module scope (`logging.getLogger(__name__)`),
+so it exists even before `set_logger()` configures its handlers/level —
+`logging.getLogger()` is a singleton keyed by name, so later configuration
+still applies to the same object. `headers` is *not* a module global: `main()`
+builds it locally and threads it explicitly through `process_library()` →
+`process_content()` → `process_media()`/`fetch_library_root()`/
+`export_episode_nfos()`/`export_season_posters()`.
+
+`baseurl` remains a module global by design: `get_request()`'s same-origin
+enforcement reads it via `globals()` before attaching the Plex token to any
+request, and that check needs to apply uniformly regardless of which function
+is calling `get_request()`. `resolve_base_settings()` still sets the global
+(via `global baseurl`) but also returns it, so callers thread it explicitly
+rather than reaching for the bare name — `main()`, `process_library()`,
+`process_content()`, `process_media()`, `fetch_library_root()`, and
+`export_season_posters()` all receive it as a parameter.
 
 ## Deployment
 
