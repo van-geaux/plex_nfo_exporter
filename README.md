@@ -2,7 +2,7 @@
 
 **Plex NFO Exporter** pulls metadata, posters, and background art out of Plex and writes them as `.nfo` and image files alongside your media, in a format other media servers like Jellyfin can read directly.
 
-> **This project was previously developed manually and is now AI-assisted.** Development has shifted to working alongside AI coding assistants, which contribute code, tests, and documentation alongside the maintainer. Review changes accordingly if that matters for your use case.
+> **This project was developed manually by hand until July 2026; development since then is AI-assisted.** Since that point, AI coding assistants contribute code, tests, and documentation alongside the maintainer. Review changes accordingly if that matters for your use case.
 
 By default, the terminal only shows a summary; full detail goes to the log file:
 ![alt text](static/image.png)
@@ -79,7 +79,7 @@ PLEX_TOKEN='super-secret-token'
 
 ### Path Mapping
 
-`Path mapping` in `config.yml` tells the exporter how to translate a file path as *Plex* reports it into the path as *this container* sees it. **Every Plex library root needs an entry once you have any entries at all** — including a root that's mounted at the exact same path for both Plex and this container. For example, if you mount the same host folder at `/synology` in both Plex and this container, you still need:
+`Path mapping` in `config.yml` tells the exporter how to translate a file path as *Plex* reports it into the path as *this container* sees it. **Every Plex library root needs an entry once you have any entries at all**, including a root that's mounted at the exact same path for both Plex and this container. For example, if you mount the same host folder at `/synology` in both Plex and this container, you still need:
 ```yaml
 Path mapping: [
     {
@@ -93,9 +93,9 @@ This is deliberate: once `Path mapping` isn't empty, any reported path that does
 ```
 Plex media path is outside configured mappings: '/synology/Some Show (2022)'
 ```
-The fix is always the same — add the missing root to `Path mapping`, even if `plex` and `local` are identical.
+The fix is always the same: add the missing root to `Path mapping`, even if `plex` and `local` are identical.
 
-The only time you can leave `Path mapping` completely empty (`Path mapping: []`) is when *every* Plex library root is mounted at the identical path in this container — in that case there's nothing to translate and no entries are required.
+The only time you can leave `Path mapping` completely empty (`Path mapping: []`) is when *every* Plex library root is mounted at the identical path in this container; in that case there's nothing to translate and no entries are required.
 
 ### Running Manually
 
@@ -151,7 +151,7 @@ Command-line flags override the corresponding `config.yml` setting for that run.
 | Flag              | Description                                                            |
 |-------------------|------------------------------------------------------------------------|
 | `--library`, `-l` | One or more library names to process (e.g. Movies, TV Shows). Wrap names containing spaces in quotes (e.g. `"TV Shows"`). |
-| `--title`, `-t`   | One or more specific media titles to process. This doesn't perform a search — it scans every item in the library and processes it if the title matches one in the provided list. Wrap titles containing spaces in quotes (e.g. `"Some Movie"`). |
+| `--title`, `-t`   | One or more specific media titles to process. This doesn't perform a search, it scans every item in the library and processes it if the title matches one in the provided list. Wrap titles containing spaces in quotes (e.g. `"Some Movie"`). |
 
 #### Export Settings
 
@@ -163,7 +163,7 @@ Command-line flags override the corresponding `config.yml` setting for that run.
 
 #### Export Toggles
 
-Each export option has a pair of flags — one to enable, one to disable.
+Each export option has a pair of flags: one to enable, one to disable.
 
 | Enable Flag                  | Disable Flag                 | Description                          |
 |-----------------------------|------------------------------|--------------------------------------|
