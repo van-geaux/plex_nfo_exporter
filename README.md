@@ -20,6 +20,7 @@ By default, the terminal only shows a summary; full detail goes to the log file:
 
 - Exports Plex media metadata into `.nfo` files, matching Plex's current movie/TV agents as well as the [Hama agent](https://github.com/ZeroQI/Hama.bundle).
 - Multiple naming formats for exports, e.g. poster as `poster.jpg` or `{filename}_poster.jpg`.
+- Custom image filename patterns can create multiple poster/fanart names in one run, using hardlinks where supported and copies otherwise.
 - Writes files straight into the media directory, so other media servers can pick them up immediately.
 - **Never refreshes or modifies Plex's own library metadata**, read-only against Plex.
 - Choose exactly which metadata fields to export (title, tagline, plot, year, etc.), and which libraries to process, or export everything.
@@ -96,6 +97,25 @@ Plex media path is outside configured mappings: '/synology/Some Show (2022)'
 The fix is always the same: add the missing root to `Path mapping`, even if `plex` and `local` are identical.
 
 The only time you can leave `Path mapping` completely empty (`Path mapping: []`) is when *every* Plex library root is mounted at the identical path in this container; in that case there's nothing to translate and no entries are required.
+
+### Custom Image Names
+
+The existing `Movie Poster/art name type` setting remains the default image-naming behavior. To provide additional names for another media server, add optional patterns under `Custom image names`:
+
+```yaml
+Movie Poster/art name type: filename
+Custom image names:
+    poster:
+        - '{filename}_poster.jpg'
+        - '{filename}-poster.jpg'
+    fanart:
+        - '{filename}_fanart.jpg'
+        - '{filename}-fanart.jpg'
+```
+
+The first pattern is the primary image. Additional patterns are created from the primary image after it is successfully added or updated. If an entry is empty or omitted, that image uses the configured `Movie Poster/art name type` behavior. Supported placeholders are `{title}`, `{filename}`, and `{type}`. `{filename}` is available when Plex provides a source media filename, such as for movies. Custom names must be filenames in the media directory, not paths.
+
+The exporter attempts to create additional names as hardlinks so they do not use extra disk space. If the filesystem does not support hardlinks, it falls back to copying the image. A missing or stale alternate is repaired from an up-to-date primary without downloading the image again.
 
 ### Running Manually
 
