@@ -6,6 +6,7 @@
 unit-tests its pure helper functions — no live Plex server required:
 
 - `sanitize_filename`, `get_file_path` (all naming-mode combinations)
+- `get_image_paths`, `sync_alternate_image` (custom image patterns, media-type-specific and per-image fallback, unusable-pattern fallback, hardlink/copy behavior); `process_content` verifies alternate synchronization after primary success
 - `map_media_path`, `safe_output_path` (path-mapping and traversal/escape
   guards)
 - `same_origin`, `get_request` (origin enforcement, timeout, redirect

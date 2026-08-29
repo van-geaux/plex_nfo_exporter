@@ -140,6 +140,120 @@ def test_get_file_path_tvshow(tmp_path):
     assert fanart == str((tmp_path / "fanart.jpg").resolve())
 
 
+def test_get_image_paths_uses_custom_patterns_and_sanitized_values(tmp_path):
+    paths = main.get_image_paths(
+        "movie",
+        "filename",
+        str(tmp_path),
+        "The Godfather",
+        "/media/The Godfather (1972).mkv",
+        {
+            "Custom image names": {
+                "poster": ["{filename}_poster.jpg", "{filename}-poster.jpg"],
+                "fanart": ["{title}-fanart.jpg"],
+            }
+        },
+    )
+
+    assert paths["poster"] == [
+        str((tmp_path / "The Godfather (1972)_poster.jpg").resolve()),
+        str((tmp_path / "The Godfather (1972)-poster.jpg").resolve()),
+    ]
+    assert paths["fanart"] == [str((tmp_path / "The Godfather-fanart.jpg").resolve())]
+
+
+def test_get_image_paths_falls_back_per_image_when_custom_entry_is_empty(tmp_path):
+    paths = main.get_image_paths(
+        "movie",
+        "title",
+        str(tmp_path),
+        "The Godfather",
+        "/media/The Godfather (1972).mkv",
+        {"Custom image names": {"poster": ["{title}-poster.jpg"], "fanart": []}},
+    )
+
+    assert paths["poster"] == [str((tmp_path / "The Godfather-poster.jpg").resolve())]
+    assert paths["fanart"] == [str((tmp_path / "The Godfather_fanart.jpg").resolve())]
+
+
+def test_get_image_paths_uses_media_type_specific_patterns_for_tvshow(tmp_path):
+    paths = main.get_image_paths(
+        "tvshow",
+        "default",
+        str(tmp_path),
+        "Some Show",
+        None,
+        {
+            "Custom image names": {
+                "poster": ["{filename}_poster.jpg"],
+                "tvshow": {
+                    "poster": ["{title}_poster.jpg", "test-poster.jpg"],
+                },
+            }
+        },
+    )
+
+    assert paths["poster"] == [
+        str((tmp_path / "Some Show_poster.jpg").resolve()),
+        str((tmp_path / "test-poster.jpg").resolve()),
+    ]
+
+
+def test_get_image_paths_skips_unusable_flat_pattern_for_tvshow(tmp_path):
+    paths = main.get_image_paths(
+        "tvshow",
+        "default",
+        str(tmp_path),
+        "Some Show",
+        None,
+        {"Custom image names": {"poster": ["{filename}_poster.jpg", "test-poster.jpg"]}},
+    )
+
+    assert paths["poster"] == [str((tmp_path / "test-poster.jpg").resolve())]
+
+
+def test_get_image_paths_falls_back_to_configured_type_when_all_patterns_unusable(tmp_path):
+    paths = main.get_image_paths(
+        "tvshow",
+        "default",
+        str(tmp_path),
+        "Some Show",
+        None,
+        {"Custom image names": {"poster": ["{filename}_poster.jpg", "{unknown}.jpg"]}},
+    )
+
+    assert paths["poster"] == [str((tmp_path / "poster.jpg").resolve())]
+
+
+def test_sync_alternate_image_creates_hardlink(tmp_path):
+    primary = tmp_path / "primary.jpg"
+    alternate = tmp_path / "alternate.jpg"
+    primary.write_bytes(b"image data")
+
+    result = main.sync_alternate_image(str(primary), str(alternate))
+
+    assert result == "hardlink"
+    assert alternate.read_bytes() == b"image data"
+    assert primary.stat().st_ino == alternate.stat().st_ino
+
+
+def test_sync_alternate_image_falls_back_to_copy(monkeypatch, tmp_path):
+    primary = tmp_path / "primary.jpg"
+    alternate = tmp_path / "alternate.jpg"
+    primary.write_bytes(b"image data")
+
+    def fail_link(*args, **kwargs):
+        raise OSError("cross-device link")
+
+    monkeypatch.setattr(main.os, "link", fail_link)
+
+    result = main.sync_alternate_image(str(primary), str(alternate))
+
+    assert result == "copy"
+    assert alternate.read_bytes() == b"image data"
+    assert primary.stat().st_ino != alternate.stat().st_ino
+
+
 # ---------------------------------------------------------------------------
 # same_origin / get_request
 # ---------------------------------------------------------------------------
@@ -467,6 +581,63 @@ def test_process_content_movie_without_media_part_does_not_raise(monkeypatch):
     )
 
     assert captured_file_titles == [None]
+
+
+def test_process_content_syncs_custom_poster_alternates_after_primary_success(monkeypatch):
+    monkeypatch.setattr(main, "logger", _FakeLogger(), raising=False)
+    monkeypatch.setattr(main, "get_request", lambda *a, **k: _FakeResponse200())
+
+    meta_root = ET.fromstring('<Video ratingKey="1" title="Movie"/>')
+
+    class _Wrapper:
+        def find(self, path):
+            return meta_root
+
+    monkeypatch.setattr(main, "parse_xml_response", lambda response: _Wrapper())
+    monkeypatch.setattr(main, "get_media_path", lambda *a, **k: ["/movies/Movie"])
+
+    processed = []
+    synced = []
+
+    def fake_process_media(kind, config, file_path, *args, **kwargs):
+        processed.append((kind, file_path))
+        return "success"
+
+    monkeypatch.setattr(main, "process_media", fake_process_media)
+    monkeypatch.setattr(main, "sync_alternate_image", lambda primary, alternate, force=False: synced.append((primary, alternate, force)))
+
+    content = ET.Element("Video", {"ratingKey": "1"})
+    args = argparse.Namespace(title=None)
+    exports = {
+        "export_nfo": False,
+        "export_episode_nfo": False,
+        "export_poster": True,
+        "export_fanart": False,
+        "export_season_poster": False,
+    }
+    summary = {"poster_new": 0}
+
+    main.process_content(
+        content,
+        "Video",
+        "movie",
+        args,
+        {"Custom image names": {"poster": ["poster.jpg", "poster-alt.jpg"]}},
+        [],
+        exports,
+        "default",
+        "default",
+        False,
+        False,
+        summary,
+        "http://plex.local",
+        {},
+    )
+
+    assert processed == [("Poster", "/movies/Movie/poster.jpg")]
+    assert synced == [
+        ("/movies/Movie/poster.jpg", "/movies/Movie/poster-alt.jpg", True)
+    ]
 
 
 # ---------------------------------------------------------------------------

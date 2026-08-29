@@ -15,6 +15,8 @@ import logging
 import os
 import re
 import requests
+import shutil
+import string
 import sys
 import xml.etree.ElementTree as ET
 import yaml
@@ -185,6 +187,22 @@ CONFIG_PLACEHOLDER = dedent("""
     # anything other than that will save as {library_type}.ext i.e. "movie.nfo", "poster.jpg", "fanart.jpg"
     Movie NFO name type: default
     Movie Poster/art name type: default
+    # Optional custom image filenames. Leave an image entry empty to use the
+    # configured Movie Poster/art name type for that image. The first usable
+    # pattern is the primary file; later usable patterns are hardlinked or copied from it.
+    # Unusable patterns are skipped; if all are unusable, configured naming is used.
+    # Flat poster/fanart entries are backward-compatible shorthand. Optional
+    # media-type sections override them per image: movie, tvshow, artist,
+    # or albums. Supported placeholders: {title}, {filename}, and {type}.
+    Custom image names:
+        poster: []
+        fanart: []
+        movie:
+            poster: []
+            fanart: []
+        tvshow:
+            poster: []
+            fanart: []
 
     # Leave this fully empty (Path mapping: []) only if EVERY Plex library
     # root is mounted at the identical path inside this container.
@@ -441,6 +459,90 @@ def get_file_path(library_type, movie_filename_type, image_filename_type, media_
         fanart_path = safe_output_path(media_path, 'fanart.jpg')
 
     return nfo_path, poster_path, fanart_path
+
+def get_image_paths(library_type, image_filename_type, media_path, media_title, file_title, config, default_paths=None):
+    if default_paths is None:
+        _, poster_path, fanart_path = get_file_path(
+            library_type,
+            'default',
+            image_filename_type,
+            media_path,
+            media_title,
+            file_title,
+        )
+    else:
+        poster_path, fanart_path = default_paths
+    defaults = {'poster': poster_path, 'fanart': fanart_path}
+    custom_names = config.get('Custom image names') or {}
+    if not isinstance(custom_names, dict):
+        raise ValueError('Custom image names must be a mapping')
+    shorthand_names = {
+        image_type: custom_names[image_type]
+        for image_type in ('poster', 'fanart')
+        if image_type in custom_names
+    }
+    media_type_names = custom_names.get(library_type)
+    if media_type_names is not None and not isinstance(media_type_names, dict):
+        raise ValueError(f'Custom image names for {library_type} must be a mapping')
+    selected_names = dict(shorthand_names)
+    for image_type in ('poster', 'fanart'):
+        if media_type_names and media_type_names.get(image_type):
+            selected_names[image_type] = media_type_names[image_type]
+
+    sanitized_title = sanitize_filename(media_title or '')
+    file_name = sanitize_filename(os.path.basename(file_title or '').rsplit('.', 1)[0])
+    values = {'title': sanitized_title, 'filename': file_name, 'type': library_type}
+    paths = {}
+
+    for image_type, default_path in defaults.items():
+        patterns = selected_names.get(image_type)
+        if not patterns:
+            paths[image_type] = [default_path]
+            continue
+        if isinstance(patterns, str):
+            patterns = [patterns]
+        if not isinstance(patterns, list):
+            raise ValueError(f'Custom image names for {image_type} must be a list')
+
+        image_paths = []
+        for pattern in patterns:
+            if not isinstance(pattern, str) or not pattern.strip():
+                continue
+            try:
+                for _, field_name, _, _ in string.Formatter().parse(pattern):
+                    if field_name is not None and field_name not in values:
+                        raise ValueError(f'Unknown image-name placeholder: {{{field_name}}}')
+                    if field_name == 'filename' and not file_name:
+                        raise ValueError('{filename} requires a media filename')
+                rendered = pattern.format(**values)
+                if not rendered or os.path.isabs(rendered) or '/' in rendered or '\\' in rendered:
+                    raise ValueError(f'Custom image name must be a filename: {pattern!r}')
+                rendered_path = safe_output_path(media_path, rendered)
+                if rendered_path not in image_paths:
+                    image_paths.append(rendered_path)
+            except (IndexError, KeyError, ValueError) as exc:
+                logger.warning(f'[CONFIG] Skipping unusable custom {image_type} name {pattern!r}: {exc}')
+
+        paths[image_type] = image_paths or [default_path]
+
+    return paths
+
+def sync_alternate_image(primary_path, alternate_path, force=False):
+    if os.path.realpath(primary_path) == os.path.realpath(alternate_path):
+        return 'already-synced'
+    if not os.path.exists(primary_path):
+        raise FileNotFoundError(primary_path)
+    if os.path.exists(alternate_path) and not force:
+        if os.path.samefile(primary_path, alternate_path) or os.path.getmtime(alternate_path) >= os.path.getmtime(primary_path):
+            return 'already-synced'
+    if os.path.exists(alternate_path):
+        os.remove(alternate_path)
+    try:
+        os.link(primary_path, alternate_path)
+        return 'hardlink'
+    except OSError:
+        shutil.copy2(primary_path, alternate_path)
+        return 'copy'
 
 def download_image(url:str, headers:dict, save_path:str) -> None:
     """
@@ -1079,6 +1181,17 @@ def process_content(content, library_root, library_type, args, config, path_mapp
     for media_path in media_paths:
         logger.debug(f'media_path: {media_path}')
         nfo_path, poster_path, fanart_path = get_file_path(library_type, movie_filename_type, image_filename_type, media_path, media_title, file_title)
+        image_paths = get_image_paths(
+            library_type,
+            image_filename_type,
+            media_path,
+            media_title,
+            file_title,
+            config,
+            default_paths=(poster_path, fanart_path),
+        )
+        poster_path = image_paths['poster'][0]
+        fanart_path = image_paths['fanart'][0]
 
         if exports['export_nfo']:
             status = process_media('NFO', config, nfo_path, library_type, meta_root, media_title, dry_run, force_overwrite)
@@ -1090,10 +1203,22 @@ def process_content(content, library_root, library_type, args, config, path_mapp
         if exports['export_poster']:
             status = process_media('Poster', config, poster_path, library_type, meta_root, media_title, dry_run, force_overwrite, baseurl=baseurl, headers=headers)
             update_summary(summary, 'poster', status)
+            if status in ('success', 'updated', 'skipped'):
+                for alternate_path in image_paths['poster'][1:]:
+                    try:
+                        sync_alternate_image(poster_path, alternate_path, force=status in ('success', 'updated'))
+                    except Exception as exc:
+                        logger.verbose(f'[FAILURE] Alternate poster for {media_title} failed: {exc}')
 
         if exports['export_fanart']:
             status = process_media('Art', config, fanart_path, library_type, meta_root, media_title, dry_run, force_overwrite, baseurl=baseurl, headers=headers)
             update_summary(summary, 'art', status)
+            if status in ('success', 'updated', 'skipped'):
+                for alternate_path in image_paths['fanart'][1:]:
+                    try:
+                        sync_alternate_image(fanart_path, alternate_path, force=status in ('success', 'updated'))
+                    except Exception as exc:
+                        logger.verbose(f'[FAILURE] Alternate fanart for {media_title} failed: {exc}')
 
         if exports['export_season_poster'] and library_type == 'tvshow':
             export_season_posters(meta_url, media_path, fanart_path, config, meta_root, media_title, dry_run, force_overwrite, summary, baseurl, headers)

@@ -20,6 +20,7 @@ By default, the terminal only shows a summary; full detail goes to the log file:
 
 - Exports Plex media metadata into `.nfo` files, matching Plex's current movie/TV agents as well as the [Hama agent](https://github.com/ZeroQI/Hama.bundle).
 - Multiple naming formats for exports, e.g. poster as `poster.jpg` or `{filename}_poster.jpg`.
+- Custom image filename patterns can create multiple poster/fanart names in one run, using hardlinks where supported and copies otherwise.
 - Writes files straight into the media directory, so other media servers can pick them up immediately.
 - **Never refreshes or modifies Plex's own library metadata**, read-only against Plex.
 - Choose exactly which metadata fields to export (title, tagline, plot, year, etc.), and which libraries to process, or export everything.
@@ -96,6 +97,30 @@ Plex media path is outside configured mappings: '/synology/Some Show (2022)'
 The fix is always the same: add the missing root to `Path mapping`, even if `plex` and `local` are identical.
 
 The only time you can leave `Path mapping` completely empty (`Path mapping: []`) is when *every* Plex library root is mounted at the identical path in this container; in that case there's nothing to translate and no entries are required.
+
+### Custom Image Names
+
+The existing `Movie Poster/art name type` setting remains the default image-naming behavior. To provide additional names for another media server, add optional patterns under `Custom image names`. Media-type sections are useful when a placeholder is only available for one kind of media:
+
+```yaml
+Movie Poster/art name type: filename
+Custom image names:
+    movie:
+        poster:
+            - '{filename}_poster.jpg'
+            - '{filename}-poster.jpg'
+        fanart:
+            - '{filename}_fanart.jpg'
+            - '{filename}-fanart.jpg'
+    tvshow:
+        poster:
+            - '{title}_poster.jpg'
+            - '{title}-poster.jpg'
+```
+
+Patterns are evaluated in order. The first usable pattern becomes the primary image name, and additional usable patterns are created from that primary image when it is successfully added, updated, or already up to date. A pattern that cannot be rendered for the current media is skipped, so `{filename}` is skipped for TV shows when Plex does not provide a source media filename and the next pattern is tried. If every custom pattern for an image is unusable, the exporter falls back to the configured `Movie Poster/art name type` behavior, not to another custom-name rule. If a media-type entry is empty or omitted, the corresponding flat `poster`/`fanart` entry is used; if that is also empty or omitted, the configured naming type is used. Supported placeholders are `{title}`, `{filename}`, and `{type}`. `{filename}` is available when Plex provides a source media filename, such as for movies. For TV shows, use `{title}` unless you provide a real filename-based pattern in a context where Plex supplies a source filename. Custom names must be filenames in the media directory, not paths.
+
+The exporter attempts to create additional names as hardlinks so they do not use extra disk space. If the filesystem does not support hardlinks, it falls back to copying the image. A missing or stale alternate is repaired from an up-to-date primary without downloading the image again.
 
 ### Running Manually
 
