@@ -113,7 +113,7 @@ Custom image names:
         - '{filename}-fanart.jpg'
 ```
 
-The first pattern is the primary image. Additional patterns are created from the primary image after it is successfully added or updated. If an entry is empty or omitted, that image uses the configured `Movie Poster/art name type` behavior. Supported placeholders are `{title}`, `{filename}`, and `{type}`. `{filename}` is available when Plex provides a source media filename, such as for movies. Custom names must be filenames in the media directory, not paths.
+The first pattern is the primary image. Additional patterns are created from the primary image when it is successfully added, updated, or already up to date. If an entry is empty or omitted, that image uses the configured `Movie Poster/art name type` behavior. Supported placeholders are `{title}`, `{filename}`, and `{type}`. `{filename}` is available when Plex provides a source media filename, such as for movies. Custom names must be filenames in the media directory, not paths.
 
 The exporter attempts to create additional names as hardlinks so they do not use extra disk space. If the filesystem does not support hardlinks, it falls back to copying the image. A missing or stale alternate is repaired from an up-to-date primary without downloading the image again.
 
