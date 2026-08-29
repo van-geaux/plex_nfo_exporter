@@ -27,7 +27,9 @@ Export episode NFO: false
 # anything other than that will save as {library_type}.ext i.e. "movie.nfo", "poster.jpg", "fanart.jpg"
 Movie NFO name type: default
 Movie Poster/art name type: default
-# Optional custom image filenames. Leave an image entry empty (or omit it) to
+# Optional custom image filenames. Flat poster/fanart entries are backward-
+# compatible shorthand. Optional media-type sections override them per image:
+# movie, tvshow, artist, or albums. Leave an image entry empty (or omit it) to
 # use the configured Movie Poster/art name type for that image. The first
 # pattern is the primary file; later patterns are hardlinked or copied from
 # it whenever the primary is successfully added, updated, or already current.
@@ -35,6 +37,12 @@ Movie Poster/art name type: default
 Custom image names:
     poster: []
     fanart: []
+    movie:
+        poster: []
+        fanart: []
+    tvshow:
+        poster: []
+        fanart: []
 
 # Leave this empty if you use docker volume mapping i.e. Path mapping: []
 # change/add path mapping if plex path is different from local (script) path

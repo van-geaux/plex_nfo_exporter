@@ -176,6 +176,29 @@ def test_get_image_paths_falls_back_per_image_when_custom_entry_is_empty(tmp_pat
     assert paths["fanart"] == [str((tmp_path / "The Godfather_fanart.jpg").resolve())]
 
 
+def test_get_image_paths_uses_media_type_specific_patterns_for_tvshow(tmp_path):
+    paths = main.get_image_paths(
+        "tvshow",
+        "default",
+        str(tmp_path),
+        "Some Show",
+        None,
+        {
+            "Custom image names": {
+                "poster": ["{filename}_poster.jpg"],
+                "tvshow": {
+                    "poster": ["{title}_poster.jpg", "test-poster.jpg"],
+                },
+            }
+        },
+    )
+
+    assert paths["poster"] == [
+        str((tmp_path / "Some Show_poster.jpg").resolve()),
+        str((tmp_path / "test-poster.jpg").resolve()),
+    ]
+
+
 def test_get_image_paths_rejects_unknown_placeholder(tmp_path):
     with pytest.raises(ValueError, match="Unknown image-name placeholder"):
         main.get_image_paths(

@@ -190,10 +190,18 @@ CONFIG_PLACEHOLDER = dedent("""
     # Optional custom image filenames. Leave an image entry empty to use the
     # configured Movie Poster/art name type for that image. The first pattern
     # is the primary file; later patterns are hardlinked or copied from it.
-    # Supported placeholders: {title}, {filename}, and {type}.
+    # Flat poster/fanart entries are backward-compatible shorthand. Optional
+    # media-type sections override them per image: movie, tvshow, artist,
+    # or albums. Supported placeholders: {title}, {filename}, and {type}.
     Custom image names:
         poster: []
         fanart: []
+        movie:
+            poster: []
+            fanart: []
+        tvshow:
+            poster: []
+            fanart: []
 
     # Leave this fully empty (Path mapping: []) only if EVERY Plex library
     # root is mounted at the identical path inside this container.
@@ -467,6 +475,18 @@ def get_image_paths(library_type, image_filename_type, media_path, media_title, 
     custom_names = config.get('Custom image names') or {}
     if not isinstance(custom_names, dict):
         raise ValueError('Custom image names must be a mapping')
+    shorthand_names = {
+        image_type: custom_names[image_type]
+        for image_type in ('poster', 'fanart')
+        if image_type in custom_names
+    }
+    media_type_names = custom_names.get(library_type)
+    if media_type_names is not None and not isinstance(media_type_names, dict):
+        raise ValueError(f'Custom image names for {library_type} must be a mapping')
+    selected_names = dict(shorthand_names)
+    for image_type in ('poster', 'fanart'):
+        if media_type_names and media_type_names.get(image_type):
+            selected_names[image_type] = media_type_names[image_type]
 
     sanitized_title = sanitize_filename(media_title or '')
     file_name = sanitize_filename(os.path.basename(file_title or '').rsplit('.', 1)[0])
@@ -474,7 +494,7 @@ def get_image_paths(library_type, image_filename_type, media_path, media_title, 
     paths = {}
 
     for image_type, default_path in defaults.items():
-        patterns = custom_names.get(image_type)
+        patterns = selected_names.get(image_type)
         if not patterns:
             paths[image_type] = [default_path]
             continue

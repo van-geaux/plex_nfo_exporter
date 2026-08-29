@@ -100,20 +100,25 @@ The only time you can leave `Path mapping` completely empty (`Path mapping: []`)
 
 ### Custom Image Names
 
-The existing `Movie Poster/art name type` setting remains the default image-naming behavior. To provide additional names for another media server, add optional patterns under `Custom image names`:
+The existing `Movie Poster/art name type` setting remains the default image-naming behavior. To provide additional names for another media server, add optional patterns under `Custom image names`. Media-type sections are useful when a placeholder is only available for one kind of media:
 
 ```yaml
 Movie Poster/art name type: filename
 Custom image names:
-    poster:
-        - '{filename}_poster.jpg'
-        - '{filename}-poster.jpg'
-    fanart:
-        - '{filename}_fanart.jpg'
-        - '{filename}-fanart.jpg'
+    movie:
+        poster:
+            - '{filename}_poster.jpg'
+            - '{filename}-poster.jpg'
+        fanart:
+            - '{filename}_fanart.jpg'
+            - '{filename}-fanart.jpg'
+    tvshow:
+        poster:
+            - '{title}_poster.jpg'
+            - '{title}-poster.jpg'
 ```
 
-The first pattern is the primary image. Additional patterns are created from the primary image when it is successfully added, updated, or already up to date. If an entry is empty or omitted, that image uses the configured `Movie Poster/art name type` behavior. Supported placeholders are `{title}`, `{filename}`, and `{type}`. `{filename}` is available when Plex provides a source media filename, such as for movies. Custom names must be filenames in the media directory, not paths.
+The first pattern is the primary image. Additional patterns are created from the primary image when it is successfully added, updated, or already up to date. If a media-type entry is empty or omitted, the corresponding flat `poster`/`fanart` entry is used; if that is also empty or omitted, the image uses the configured `Movie Poster/art name type` behavior. Supported placeholders are `{title}`, `{filename}`, and `{type}`. `{filename}` is available when Plex provides a source media filename, such as for movies. For TV shows, use `{title}` unless you provide a real filename-based pattern in a context where Plex supplies a source filename. Custom names must be filenames in the media directory, not paths.
 
 The exporter attempts to create additional names as hardlinks so they do not use extra disk space. If the filesystem does not support hardlinks, it falls back to copying the image. A missing or stale alternate is repaired from an up-to-date primary without downloading the image again.
 
