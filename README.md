@@ -118,6 +118,20 @@ Custom image names:
             - '{title}-poster.jpg'
 ```
 
+You can customize one image aspect while leaving another on the configured naming type. For example, this customizes movie posters but leaves movie fanart using `Movie Poster/art name type`:
+
+```yaml
+Movie Poster/art name type: filename
+Custom image names:
+    movie:
+        poster:
+            - '{filename}_poster.jpg'
+            - '{filename}-poster.jpg'
+        fanart: []
+```
+
+An empty or omitted `poster` or `fanart` entry uses the configured naming type for that aspect, provided there is no corresponding flat shorthand entry.
+
 Patterns are evaluated in order. The first usable pattern becomes the primary image name, and additional usable patterns are created from that primary image when it is successfully added, updated, or already up to date. A pattern that cannot be rendered for the current media is skipped, so `{filename}` is skipped for TV shows when Plex does not provide a source media filename and the next pattern is tried. If every custom pattern for an image is unusable, the exporter falls back to the configured `Movie Poster/art name type` behavior, not to another custom-name rule. If a media-type entry is empty or omitted, the corresponding flat `poster`/`fanart` entry is used; if that is also empty or omitted, the configured naming type is used. Supported placeholders are `{title}`, `{filename}`, and `{type}`. `{filename}` is available when Plex provides a source media filename, such as for movies. For TV shows, use `{title}` unless you provide a real filename-based pattern in a context where Plex supplies a source filename. Custom names must be filenames in the media directory, not paths.
 
 The exporter attempts to create additional names as hardlinks so they do not use extra disk space. If the filesystem does not support hardlinks, it falls back to copying the image. A missing or stale alternate is repaired from an up-to-date primary without downloading the image again.
