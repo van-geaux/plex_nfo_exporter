@@ -37,14 +37,26 @@ Movie Poster/art name type: default
 # type is used instead.
 # Supported placeholders: {title}, {filename}, and {type}.
 Custom image names:
-    poster: []
-    fanart: []
+    poster:
+        - '{title}_poster.jpg'
+        - '{title}-poster.jpg'
+    fanart:
+        - '{title}_fanart.jpg'
+        - '{title}-fanart.jpg'
     movie:
-        poster: []
-        fanart: []
+        poster:
+            - '{filename}_poster.jpg'
+            - '{filename}-poster.jpg'
+        fanart:
+            - '{filename}_fanart.jpg'
+            - '{filename}-fanart.jpg'
     tvshow:
-        poster: []
-        fanart: []
+        poster:
+            - '{title}_poster.jpg'
+            - '{title}-poster.jpg'
+        fanart:
+            - '{title}_fanart.jpg'
+            - '{title}-fanart.jpg'
 
 # Leave this empty if you use docker volume mapping i.e. Path mapping: []
 # change/add path mapping if plex path is different from local (script) path
