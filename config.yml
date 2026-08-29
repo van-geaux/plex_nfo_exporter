@@ -40,16 +40,10 @@ Custom image names:
     poster:
         - '{title}_poster.jpg'
         - '{title}-poster.jpg'
-    fanart:
-        - '{title}_fanart.jpg'
-        - '{title}-fanart.jpg'
+    fanart: []
     movie:
-        poster:
-            - '{filename}_poster.jpg'
-            - '{filename}-poster.jpg'
-        fanart:
-            - '{filename}_fanart.jpg'
-            - '{filename}-fanart.jpg'
+        poster: []
+        fanart: []
     tvshow:
         poster:
             - '{title}_poster.jpg'
