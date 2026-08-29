@@ -31,8 +31,10 @@ Movie Poster/art name type: default
 # compatible shorthand. Optional media-type sections override them per image:
 # movie, tvshow, artist, or albums. Leave an image entry empty (or omit it) to
 # use the configured Movie Poster/art name type for that image. The first
-# pattern is the primary file; later patterns are hardlinked or copied from
-# it whenever the primary is successfully added, updated, or already current.
+# usable pattern is the primary file; later usable patterns are hardlinked or
+# copied from it whenever the primary is successfully added, updated, or current.
+# Unusable patterns are skipped; if all are unusable, the configured naming
+# type is used instead.
 # Supported placeholders: {title}, {filename}, and {type}.
 Custom image names:
     poster: []

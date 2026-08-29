@@ -199,16 +199,30 @@ def test_get_image_paths_uses_media_type_specific_patterns_for_tvshow(tmp_path):
     ]
 
 
-def test_get_image_paths_rejects_unknown_placeholder(tmp_path):
-    with pytest.raises(ValueError, match="Unknown image-name placeholder"):
-        main.get_image_paths(
-            "movie",
-            "default",
-            str(tmp_path),
-            "The Godfather",
-            "/media/The Godfather (1972).mkv",
-            {"Custom image names": {"poster": ["{unknown}.jpg"]}},
-        )
+def test_get_image_paths_skips_unusable_flat_pattern_for_tvshow(tmp_path):
+    paths = main.get_image_paths(
+        "tvshow",
+        "default",
+        str(tmp_path),
+        "Some Show",
+        None,
+        {"Custom image names": {"poster": ["{filename}_poster.jpg", "test-poster.jpg"]}},
+    )
+
+    assert paths["poster"] == [str((tmp_path / "test-poster.jpg").resolve())]
+
+
+def test_get_image_paths_falls_back_to_configured_type_when_all_patterns_unusable(tmp_path):
+    paths = main.get_image_paths(
+        "tvshow",
+        "default",
+        str(tmp_path),
+        "Some Show",
+        None,
+        {"Custom image names": {"poster": ["{filename}_poster.jpg", "{unknown}.jpg"]}},
+    )
+
+    assert paths["poster"] == [str((tmp_path / "poster.jpg").resolve())]
 
 
 def test_sync_alternate_image_creates_hardlink(tmp_path):

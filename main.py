@@ -188,8 +188,9 @@ CONFIG_PLACEHOLDER = dedent("""
     Movie NFO name type: default
     Movie Poster/art name type: default
     # Optional custom image filenames. Leave an image entry empty to use the
-    # configured Movie Poster/art name type for that image. The first pattern
-    # is the primary file; later patterns are hardlinked or copied from it.
+    # configured Movie Poster/art name type for that image. The first usable
+    # pattern is the primary file; later usable patterns are hardlinked or copied from it.
+    # Unusable patterns are skipped; if all are unusable, configured naming is used.
     # Flat poster/fanart entries are backward-compatible shorthand. Optional
     # media-type sections override them per image: movie, tvshow, artist,
     # or albums. Supported placeholders: {title}, {filename}, and {type}.
@@ -507,17 +508,20 @@ def get_image_paths(library_type, image_filename_type, media_path, media_title, 
         for pattern in patterns:
             if not isinstance(pattern, str) or not pattern.strip():
                 continue
-            for _, field_name, _, _ in string.Formatter().parse(pattern):
-                if field_name is not None and field_name not in values:
-                    raise ValueError(f'Unknown image-name placeholder: {{{field_name}}}')
-                if field_name == 'filename' and not file_name:
-                    raise ValueError('{filename} requires a media filename')
-            rendered = pattern.format(**values)
-            if not rendered or os.path.isabs(rendered) or '/' in rendered or '\\' in rendered:
-                raise ValueError(f'Custom image name must be a filename: {pattern!r}')
-            rendered_path = safe_output_path(media_path, rendered)
-            if rendered_path not in image_paths:
-                image_paths.append(rendered_path)
+            try:
+                for _, field_name, _, _ in string.Formatter().parse(pattern):
+                    if field_name is not None and field_name not in values:
+                        raise ValueError(f'Unknown image-name placeholder: {{{field_name}}}')
+                    if field_name == 'filename' and not file_name:
+                        raise ValueError('{filename} requires a media filename')
+                rendered = pattern.format(**values)
+                if not rendered or os.path.isabs(rendered) or '/' in rendered or '\\' in rendered:
+                    raise ValueError(f'Custom image name must be a filename: {pattern!r}')
+                rendered_path = safe_output_path(media_path, rendered)
+                if rendered_path not in image_paths:
+                    image_paths.append(rendered_path)
+            except (IndexError, KeyError, ValueError) as exc:
+                logger.warning(f'[CONFIG] Skipping unusable custom {image_type} name {pattern!r}: {exc}')
 
         paths[image_type] = image_paths or [default_path]
 
